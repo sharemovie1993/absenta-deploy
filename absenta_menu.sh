@@ -172,9 +172,11 @@ menu_wireguard() {
     echo "7.1 Setup WireGuard client di server aplikasi/DB/Redis"
     echo "7.2 Tambah client di server WireGuard"
     echo "7.3 Hapus client di server WireGuard"
-     echo "7.4 Cek status WireGuard (wg show)"
-     echo "7.5 Restart layanan WireGuard (wg-quick@IFACE)"
-     echo "7.6 Uji konektivitas ping antar IP WireGuard"
+    echo "7.4 Cek status WireGuard (wg show)"
+    echo "7.5 Restart layanan WireGuard (wg-quick@IFACE)"
+    echo "7.6 Uji konektivitas ping antar IP WireGuard"
+    echo "7.7 Lihat konfigurasi WireGuard (wg0.conf)"
+    echo "7.8 Jalankan tcpdump ICMP di interface WireGuard"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -216,6 +218,30 @@ menu_wireguard() {
             echo "Ping dari server ini ke $TARGET_IP (source IP tidak dapat diatur langsung via ping standar)"
           fi
           ping -c 4 "$TARGET_IP" || echo "Ping ke $TARGET_IP gagal."
+          pause
+        fi
+        ;;
+      7|7.7)
+        read -p "Nama interface WireGuard (default wg0): " WG_IFACE
+        WG_IFACE=${WG_IFACE:-wg0}
+        WG_CONF="/etc/wireguard/$WG_IFACE.conf"
+        if [ -f "$WG_CONF" ]; then
+          echo "Isi konfigurasi $WG_CONF:"
+          sed -n '1,200p' "$WG_CONF"
+        else
+          echo "File konfigurasi $WG_CONF tidak ditemukan."
+        fi
+        pause
+        ;;
+      8|7.8)
+        read -p "Nama interface WireGuard (default wg0): " WG_IFACE
+        WG_IFACE=${WG_IFACE:-wg0}
+        if ! command -v tcpdump >/dev/null 2>&1; then
+          echo "tcpdump belum terpasang. Install dengan: apt install tcpdump"
+          pause
+        else
+          echo "Menjalankan tcpdump untuk ICMP di interface $WG_IFACE. Tekan Ctrl+C untuk berhenti."
+          tcpdump -n -i "$WG_IFACE" icmp
           pause
         fi
         ;;
