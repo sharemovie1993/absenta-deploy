@@ -69,19 +69,35 @@ menu_backend_frontend() {
 }
 
 db_status() {
-  echo "Status service PostgreSQL:"
+  echo "=== Status Database PostgreSQL ==="
   if command -v systemctl >/dev/null 2>&1; then
-    systemctl status postgresql --no-pager -l | head -n 20 || echo "Gagal membaca status service postgresql."
+    echo ""
+    echo "Status service:"
+    systemctl is-active postgresql 2>/dev/null || echo "Gagal membaca status service postgresql."
   else
     echo "systemctl tidak tersedia."
   fi
   if command -v psql >/dev/null 2>&1; then
     echo ""
-    echo "Informasi versi dan database aktif:"
+    echo "Konfigurasi runtime:"
+    LISTEN_ADDR=$(sudo -u postgres psql -tAc "SHOW listen_addresses;" 2>/dev/null || echo "unknown")
+    PORT_VAL=$(sudo -u postgres psql -tAc "SHOW port;" 2>/dev/null || echo "unknown")
+    echo "  listen_addresses = $LISTEN_ADDR"
+    echo "  port            = $PORT_VAL"
+    echo ""
+    echo "Informasi versi:"
     sudo -u postgres psql -tAc "SELECT version();" || echo "Gagal mengambil versi PostgreSQL."
-    sudo -u postgres psql -lqt | head -n 10 || echo "Gagal menampilkan daftar database."
   else
-    echo "psql tidak ditemukan di PATH."
+    echo "psql tidak ditemukan di PATH, tidak bisa membaca konfigurasi runtime."
+  fi
+  echo ""
+  echo "Socket yang listen (postgres):"
+  if command -v ss >/dev/null 2>&1; then
+    ss -plnt 2>/dev/null | grep postgres || echo "Tidak ada socket postgres terdeteksi atau ss tidak tersedia."
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -plnt 2>/dev/null | grep postgres || echo "Tidak ada socket postgres terdeteksi."
+  else
+    echo "ss/netstat tidak tersedia."
   fi
 }
 
@@ -93,11 +109,21 @@ db_show_config() {
   fi
   HBA_PATH="$(dirname "$CONF_PATH")/pg_hba.conf"
   echo "postgresql.conf: $CONF_PATH"
-  sed -n '1,120p' "$CONF_PATH" || true
+  if command -v less >/dev/null 2>&1; then
+    echo "Membuka postgresql.conf dengan less (mode scroll)."
+    less "$CONF_PATH"
+  else
+    sed -n '1,200p' "$CONF_PATH" || true
+  fi
   echo ""
   if [ -f "$HBA_PATH" ]; then
     echo "pg_hba.conf: $HBA_PATH"
-    sed -n '1,80p' "$HBA_PATH" || true
+    if command -v less >/dev/null 2>&1; then
+      echo "Membuka pg_hba.conf dengan less (mode scroll)."
+      less "$HBA_PATH"
+    else
+      sed -n '1,160p' "$HBA_PATH" || true
+    fi
   else
     echo "pg_hba.conf tidak ditemukan berdampingan dengan postgresql.conf."
   fi
@@ -564,10 +590,15 @@ diagnose_db() {
   echo ""
   echo "--- Cek koneksi TCP ke $DB_HOST:$DB_PORT ---"
   if command -v nc >/dev/null 2>&1; then
-    nc -zv "$DB_HOST" "$DB_PORT" || echo "Koneksi TCP ke $DB_HOST:$DB_PORT gagal."
+    nc -zvw 5 "$DB_HOST" "$DB_PORT" || echo "Koneksi TCP ke $DB_HOST:$DB_PORT gagal atau timeout."
   elif command -v telnet >/dev/null 2>&1; then
-    echo "telnet $DB_HOST $DB_PORT (tekan Ctrl+] lalu 'quit' untuk keluar)"
-    telnet "$DB_HOST" "$DB_PORT" || echo "Koneksi telnet gagal."
+    if command -v timeout >/dev/null 2>&1; then
+      echo "Menggunakan telnet dengan timeout 5 detik..."
+      timeout 5 telnet "$DB_HOST" "$DB_PORT" || echo "Koneksi telnet gagal atau timeout."
+    else
+      echo "telnet $DB_HOST $DB_PORT (tekan Ctrl+] lalu 'quit' untuk keluar)"
+      telnet "$DB_HOST" "$DB_PORT" || echo "Koneksi telnet gagal."
+    fi
   else
     echo "nc/telnet tidak tersedia. Install salah satunya untuk tes TCP."
   fi
@@ -604,10 +635,15 @@ wizard_cek_koneksi_db() {
   echo ""
   echo "Langkah 2: Cek port TCP $DB_PORT di $DB_HOST ..."
   if command -v nc >/dev/null 2>&1; then
-    nc -zv "$DB_HOST" "$DB_PORT" && echo "Port $DB_PORT TERBUKA." || echo "Port $DB_PORT TERTUTUP atau tidak bisa dijangkau."
+    nc -zvw 5 "$DB_HOST" "$DB_PORT" && echo "Port $DB_PORT TERBUKA." || echo "Port $DB_PORT TERTUTUP atau timeout/tidak bisa dijangkau."
   elif command -v telnet >/dev/null 2>&1; then
-    echo "Menggunakan telnet untuk cek port (Ctrl+] lalu quit untuk keluar jika tersambung)..."
-    telnet "$DB_HOST" "$DB_PORT" || echo "Telnet gagal membuka koneksi ke port $DB_PORT."
+    if command -v timeout >/dev/null 2>&1; then
+      echo "Menggunakan telnet dengan timeout 5 detik..."
+      timeout 5 telnet "$DB_HOST" "$DB_PORT" || echo "Telnet gagal atau timeout membuka koneksi ke port $DB_PORT."
+    else
+      echo "Menggunakan telnet untuk cek port (Ctrl+] lalu quit untuk keluar jika tersambung)..."
+      telnet "$DB_HOST" "$DB_PORT" || echo "Telnet gagal membuka koneksi ke port $DB_PORT."
+    fi
   else
     echo "nc/telnet tidak ditemukan, lewati cek port."
   fi
