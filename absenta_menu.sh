@@ -315,6 +315,136 @@ menu_security() {
   done
 }
 
+menu_diagnostics() {
+  while true; do
+    clear
+    echo "=== 9. Diagnostik & Report Server ==="
+    echo "9.1 Report App Server (backend + frontend lokal)"
+    echo "9.2 Diagnosa Nginx & domain"
+    echo "9.3 Diagnosa Redis"
+    echo "9.4 Diagnosa Koneksi Database (TCP saja)"
+    echo "0. Kembali"
+    read -p "Pilih: " choice
+    case "$choice" in
+      1|9.1)
+        echo "=== Report App Server ==="
+        echo ""
+        echo "--- Informasi sistem dasar ---"
+        hostname
+        echo ""
+        echo "Uptime:"
+        uptime || true
+        echo ""
+        echo "--- PM2 status ---"
+        if command -v pm2 >/dev/null 2>&1; then
+          pm2 list || true
+        else
+          echo "pm2 tidak ditemukan."
+        fi
+        echo ""
+        echo "--- Service Node.js yang listen di port umum (3000/8080) ---"
+        ss -plnt 2>/dev/null | grep -E '(:3000|:8080)' || echo "Tidak ada proses yang listen di 3000/8080 atau ss tidak tersedia."
+        echo ""
+        echo "--- Cek health backend via localhost (jika ada) ---"
+        if command -v curl >/dev/null 2>&1; then
+          echo "Mencoba curl http://127.0.0.1:3000/health ..."
+          curl -sS -o /tmp/absenta_backend_health.txt -w "\nHTTP %{http_code}\n" http://127.0.0.1:3000/health || echo "Gagal curl backend health."
+          echo "Response (maks 40 baris):"
+          sed -n '1,40p' /tmp/absenta_backend_health.txt 2>/dev/null || true
+          rm -f /tmp/absenta_backend_health.txt || true
+        else
+          echo "curl tidak ditemukan."
+        fi
+        echo ""
+        echo "--- Cek environment backend (hanya key penting jika ada) ---"
+        BACKEND_ENV="$SCRIPT_DIR/backend/.env"
+        if [ -f "$BACKEND_ENV" ]; then
+          grep -E '^(DATABASE_URL|REDIS_URL|APP_URL|FRONTEND_URL|BACKEND_URL|API_BASE_URL)=' "$BACKEND_ENV" || echo "Key penting tidak ditemukan di .env."
+        else
+          echo "File backend/.env tidak ditemukan relatif terhadap $SCRIPT_DIR."
+        fi
+        pause
+        ;;
+      2|9.2)
+        echo "=== Diagnosa Nginx & Domain ==="
+        if ! command -v nginx >/dev/null 2>&1; then
+          echo "nginx tidak terpasang di server ini."
+          pause
+        else
+          echo "--- nginx -t ---"
+          nginx -t || true
+          echo ""
+          echo "--- systemctl status nginx (20 baris pertama) ---"
+          systemctl status nginx --no-pager -l | head -n 20 || true
+          echo ""
+          if command -v curl >/dev/null 2>&1; then
+            read -p "Masukkan domain frontend untuk dicek (contoh www.absenta.id): " FRONT_DOMAIN
+            if [ -n "$FRONT_DOMAIN" ]; then
+              echo ""
+              echo "--- HTTP header untuk http://$FRONT_DOMAIN ---"
+              curl -I --max-time 10 "http://$FRONT_DOMAIN" || echo "Gagal curl http://$FRONT_DOMAIN"
+              echo ""
+              echo "--- HTTP header untuk https://$FRONT_DOMAIN (jika HTTPS) ---"
+              curl -I -k --max-time 10 "https://$FRONT_DOMAIN" || echo "Gagal curl https://$FRONT_DOMAIN"
+            else
+              echo "Domain kosong, lewati cek curl."
+            fi
+          else
+            echo "curl tidak ditemukan."
+          fi
+          pause
+        fi
+        ;;
+      3|9.3)
+        echo "=== Diagnosa Redis ==="
+        if ! command -v redis-cli >/dev/null 2>&1; then
+          echo "redis-cli tidak ditemukan. Pastikan Redis terpasang di server ini."
+          pause
+        else
+          read -p "Host Redis (default 127.0.0.1): " REDIS_HOST
+          REDIS_HOST=${REDIS_HOST:-127.0.0.1}
+          read -p "Port Redis (default 6379): " REDIS_PORT
+          REDIS_PORT=${REDIS_PORT:-6379}
+          echo ""
+          echo "--- redis-cli PING ---"
+          redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" PING || echo "PING ke Redis gagal."
+          echo ""
+          echo "--- redis-cli INFO server (ringkas) ---"
+          redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" INFO server | sed -n '1,40p' || echo "Gagal ambil INFO server."
+          echo ""
+          echo "--- redis-cli INFO stats (ringkas) ---"
+          redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" INFO stats | sed -n '1,40p' || echo "Gagal ambil INFO stats."
+          pause
+        fi
+        ;;
+      4|9.4)
+        echo "=== Diagnosa Koneksi Database (TCP) ==="
+        read -p "Host DB (contoh 10.50.0.3 atau 127.0.0.1): " DB_HOST
+        read -p "Port DB (default 5432): " DB_PORT
+        DB_PORT=${DB_PORT:-5432}
+        echo ""
+        echo "--- Cek koneksi TCP ke $DB_HOST:$DB_PORT ---"
+        if command -v nc >/dev/null 2>&1; then
+          nc -zv "$DB_HOST" "$DB_PORT" || echo "Koneksi TCP ke $DB_HOST:$DB_PORT gagal."
+        elif command -v telnet >/dev/null 2>&1; then
+          echo "telnet $DB_HOST $DB_PORT (tekan Ctrl+] lalu 'quit' untuk keluar)"
+          telnet "$DB_HOST" "$DB_PORT" || echo "Koneksi telnet gagal."
+        else
+          echo "nc/telnet tidak tersedia. Install salah satunya untuk tes TCP."
+        fi
+        pause
+        ;;
+      0)
+        break
+        ;;
+      *)
+        echo "Pilihan tidak dikenal"
+        pause
+        ;;
+    esac
+  done
+}
+
 while true; do
   clear
   echo "===== ABSENTA DEPLOY MENU ====="
@@ -326,6 +456,7 @@ while true; do
   echo "6. Nginx Reverse Proxy"
   echo "7. WireGuard VPN"
   echo "8. Keamanan Server (Hardening)"
+  echo "9. Diagnostik & Report"
   echo "0. Keluar"
   read -p "Pilih menu: " main_choice
   case "$main_choice" in
@@ -352,6 +483,9 @@ while true; do
       ;;
     8)
       menu_security
+      ;;
+    9)
+      menu_diagnostics
       ;;
     0)
       echo "Keluar."
