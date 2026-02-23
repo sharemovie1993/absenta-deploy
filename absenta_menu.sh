@@ -534,6 +534,85 @@ menu_pm2() {
   done
 }
 
+menu_packages() {
+  while true; do
+    clear
+    echo "=== Manajemen Paket Sistem (apt) ==="
+    echo "1. Hapus nginx (nginx, nginx-full, nginx-common)"
+    echo "2. Hapus Redis (redis-server dan paket terkait)"
+    echo "3. Hapus PostgreSQL (postgresql dan paket terkait)"
+    echo "4. Jalankan apt autoremove"
+    echo "0. Kembali"
+    read -p "Pilih: " choice
+    case "$choice" in
+      1)
+        if ! command -v apt-get >/dev/null 2>&1; then
+          echo "apt-get tidak ditemukan. Hanya mendukung sistem berbasis Debian/Ubuntu."
+          pause
+        else
+          echo "PERINGATAN: Ini akan menghapus nginx (reverse proxy/web server) dari server ini."
+          read -p "Lanjut hapus nginx? (y/n): " CONF
+          if [ "$CONF" = "y" ]; then
+            apt-get remove --purge -y nginx nginx-full nginx-common || true
+            apt-get autoremove -y || true
+          else
+            echo "Batal hapus nginx."
+          fi
+          pause
+        fi
+        ;;
+      2)
+        if ! command -v apt-get >/dev/null 2>&1; then
+          echo "apt-get tidak ditemukan. Hanya mendukung sistem berbasis Debian/Ubuntu."
+          pause
+        else
+          echo "PERINGATAN: Ini akan menghapus Redis server dari server ini."
+          read -p "Lanjut hapus redis-server? (y/n): " CONF
+          if [ "$CONF" = "y" ]; then
+            apt-get remove --purge -y redis-server redis-tools || true
+            apt-get autoremove -y || true
+          else
+            echo "Batal hapus redis-server."
+          fi
+          pause
+        fi
+        ;;
+      3)
+        if ! command -v apt-get >/dev/null 2>&1; then
+          echo "apt-get tidak ditemukan. Hanya mendukung sistem berbasis Debian/Ubuntu."
+          pause
+        else
+          echo "PERINGATAN: Ini akan menghapus PostgreSQL server dari server ini."
+          echo "Pastikan sudah ada backup database sebelum melanjutkan."
+          read -p "Lanjut hapus postgresql? (y/n): " CONF
+          if [ "$CONF" = "y" ]; then
+            apt-get remove --purge -y 'postgresql*' postgresql-client postgresql-contrib || true
+            apt-get autoremove -y || true
+          else
+            echo "Batal hapus postgresql."
+          fi
+          pause
+        fi
+        ;;
+      4)
+        if ! command -v apt-get >/dev/null 2>&1; then
+          echo "apt-get tidak ditemukan."
+        else
+          apt-get autoremove -y || true
+        fi
+        pause
+        ;;
+      0)
+        break
+        ;;
+      *)
+        echo "Pilihan tidak dikenal"
+        pause
+        ;;
+    esac
+  done
+}
+
 select_server_profile() {
   echo "===== Deteksi Lingkungan Server ====="
   if command -v nginx >/dev/null 2>&1; then
@@ -594,9 +673,11 @@ main_menu_app() {
     echo "1. Deploy/Update App Server (backend + frontend)"
     echo "2. Nginx Reverse Proxy"
     echo "3. WireGuard VPN"
-    echo "4. Diagnostik & Report"
-    echo "5. PM2 & Monitoring Proses"
-    echo "6. Keamanan Server (Hardening)"
+    echo "4. Mail Server (Mailcow + GUI)"
+    echo "5. Diagnostik & Report"
+    echo "6. PM2 & Monitoring Proses"
+    echo "7. Keamanan Server (Hardening)"
+    echo "8. Manajemen Paket Sistem (hapus nginx/redis/postgresql)"
     echo "0. Keluar"
     read -p "Pilih menu: " choice
     case "$choice" in
@@ -610,13 +691,20 @@ main_menu_app() {
         menu_wireguard
         ;;
       4)
-        menu_diagnostics
+        bash "$SCRIPT_DIR/deploy_mail_server.sh"
+        pause
         ;;
       5)
-        menu_pm2
+        menu_diagnostics
         ;;
       6)
+        menu_pm2
+        ;;
+      7)
         menu_security
+        ;;
+      8)
+        menu_packages
         ;;
       0)
         echo "Keluar."
@@ -681,6 +769,7 @@ main_menu_db() {
     echo "2. WireGuard VPN"
     echo "3. Diagnostik & Report (fokus DB/Redis/Network)"
     echo "4. Keamanan Server (Hardening)"
+    echo "5. Manajemen Paket Sistem (hapus nginx/redis/postgresql)"
     echo "0. Keluar"
     read -p "Pilih menu: " choice
     case "$choice" in
@@ -695,6 +784,9 @@ main_menu_db() {
         ;;
       4)
         menu_security
+        ;;
+      5)
+        menu_packages
         ;;
       0)
         echo "Keluar."
@@ -716,6 +808,7 @@ main_menu_redis() {
     echo "2. WireGuard VPN"
     echo "3. Diagnostik & Report (Redis/Network)"
     echo "4. Keamanan Server (Hardening)"
+    echo "5. Manajemen Paket Sistem (hapus nginx/redis/postgresql)"
     echo "0. Keluar"
     read -p "Pilih menu: " choice
     case "$choice" in
@@ -730,6 +823,9 @@ main_menu_redis() {
         ;;
       4)
         menu_security
+        ;;
+      5)
+        menu_packages
         ;;
       0)
         echo "Keluar."
@@ -788,6 +884,7 @@ main_menu_general() {
     echo "8. Keamanan Server (Hardening)"
     echo "9. Diagnostik & Report"
     echo "10. PM2 & Monitoring Proses"
+    echo "11. Manajemen Paket Sistem (hapus nginx/redis/postgresql)"
     echo "0. Keluar"
     read -p "Pilih menu: " main_choice
     case "$main_choice" in
@@ -820,6 +917,9 @@ main_menu_general() {
         ;;
       10)
         menu_pm2
+        ;;
+      11)
+        menu_packages
         ;;
       0)
         echo "Keluar."
