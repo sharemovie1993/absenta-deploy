@@ -129,6 +129,46 @@ db_backup() {
   echo "Backup selesai."
 }
 
+db_restore() {
+  if ! command -v pg_restore >/dev/null 2>&1; then
+    echo "pg_restore tidak ditemukan. Pastikan paket postgresql-client terpasang."
+    return
+  fi
+  read -p "Path file backup (.dump) yang akan direstore: " BK_FILE
+  if [ ! -f "$BK_FILE" ]; then
+    echo "File $BK_FILE tidak ditemukan."
+    return
+  fi
+  read -p "Nama database tujuan restore (default absensi): " RS_DB_NAME
+  RS_DB_NAME=${RS_DB_NAME:-absensi}
+  read -p "Drop isi database sebelum restore (clean)? (y/n, default n): " RS_CLEAN
+  RS_CLEAN=${RS_CLEAN:-n}
+  EXTRA_FLAGS=""
+  if [ "$RS_CLEAN" = "y" ] || [ "$RS_CLEAN" = "Y" ]; then
+    EXTRA_FLAGS="-c"
+  fi
+  echo "Menjalankan restore ke database $RS_DB_NAME dari $BK_FILE"
+  sudo -u postgres pg_restore $EXTRA_FLAGS -d "$RS_DB_NAME" "$BK_FILE" || { echo "Restore gagal."; return; }
+  echo "Restore selesai."
+}
+
+db_show_size() {
+  if ! command -v psql >/dev/null 2>&1; then
+    echo "psql tidak ditemukan di PATH."
+    return
+  fi
+  echo "Ukuran per database:"
+  sudo -u postgres psql -x -c "SELECT datname, pg_size_pretty(pg_database_size(datname)) AS size FROM pg_database ORDER BY pg_database_size(datname) DESC;" | sed -n '1,80p' || echo "Gagal mengambil ukuran database."
+  echo ""
+  read -p "Tampilkan ukuran tabel untuk database tertentu? (y/n, default n): " SHOW_TABLES
+  SHOW_TABLES=${SHOW_TABLES:-n}
+  if [ "$SHOW_TABLES" = "y" ] || [ "$SHOW_TABLES" = "Y" ]; then
+    read -p "Nama database (default absensi): " SZ_DB_NAME
+    SZ_DB_NAME=${SZ_DB_NAME:-absensi}
+    sudo -u postgres psql -d "$SZ_DB_NAME" -x -c "SELECT schemaname, relname, pg_size_pretty(pg_total_relation_size(quote_ident(schemaname)||'.'||quote_ident(relname))) AS size FROM pg_stat_user_tables ORDER BY pg_total_relation_size(quote_ident(schemaname)||'.'||quote_ident(relname)) DESC;" | sed -n '1,80p' || echo "Gagal mengambil ukuran tabel."
+  fi
+}
+
 menu_db_server() {
   while true; do
     clear
@@ -139,6 +179,8 @@ menu_db_server() {
     echo "3.4 Lihat konfigurasi database"
     echo "3.5 Restart database"
     echo "3.6 Backup database"
+    echo "3.7 Restore database dari backup"
+    echo "3.8 Lihat ukuran database/tabel"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -164,6 +206,14 @@ menu_db_server() {
         ;;
       6|3.6)
         db_backup
+        pause
+        ;;
+      7|3.7)
+        db_restore
+        pause
+        ;;
+      8|3.8)
+        db_show_size
         pause
         ;;
       0)
@@ -348,6 +398,40 @@ menu_wireguard() {
         ;;
       4)
         menu_wireguard_server_side
+        ;;
+      0)
+        break
+        ;;
+      *)
+        echo "Pilihan tidak dikenal"
+        pause
+        ;;
+    esac
+  done
+}
+
+menu_env_config() {
+  while true; do
+    clear
+    echo "=== Konfigurasi Environment ==="
+    echo "1. .env backend"
+    echo "2. .env frontend"
+    echo "0. Kembali"
+    read -p "Pilih: " choice
+    case "$choice" in
+      1)
+        if ! command -v nano >/dev/null 2>&1; then
+          apt update -y
+          apt install -y nano
+        fi
+        nano /var/www/absenta/backend/.env
+        ;;
+      2)
+        if ! command -v nano >/dev/null 2>&1; then
+          apt update -y
+          apt install -y nano
+        fi
+        nano /var/www/absenta/frontend/.env
         ;;
       0)
         break
@@ -971,7 +1055,8 @@ while true; do
   echo "===== ABSENTA CONTROL MENU ====="
   echo "1. Deploy"
   echo "2. Diagnosa"
-  echo "3. Keamanan Server (Hardening)"
+  echo "3. Konfigurasi Environment"
+  echo "4. Keamanan Server (Hardening)"
   echo "0. Keluar"
   read -p "Pilih menu: " main_choice
   case "$main_choice" in
@@ -982,6 +1067,9 @@ while true; do
       menu_diagnosa
       ;;
     3)
+      menu_env_config
+      ;;
+    4)
       menu_security
       ;;
     0)
