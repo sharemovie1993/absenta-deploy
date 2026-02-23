@@ -614,6 +614,7 @@ menu_ip_config() {
     echo "1. Set IP Dynamic (DHCP)"
     echo "2. Set IP Static"
     echo "3. Cek IP Saat Ini"
+    echo "4. Restart Layanan Jaringan"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -627,6 +628,10 @@ menu_ip_config() {
         ;;
       3)
         show_current_ip
+        pause
+        ;;
+      4)
+        restart_network_services
         pause
         ;;
       0)
