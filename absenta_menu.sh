@@ -573,6 +573,71 @@ diagnose_db() {
   fi
 }
 
+wizard_cek_koneksi_db() {
+  clear
+  echo "=== Wizard Cek Koneksi ke Server PostgreSQL ==="
+  echo ""
+  echo "Wizard ini membantu menguji dari mesin INI ke server database PostgreSQL."
+  echo "Langkah-langkah:"
+  echo "  1) Cek ping ke host database"
+  echo "  2) Cek port TCP PostgreSQL (default 5432)"
+  echo "  3) (Opsional) Coba login ke database dengan psql"
+  echo ""
+
+  read -p "Hostname/IP server database (contoh 10.10.10.116): " DB_HOST
+  if [ -z "$DB_HOST" ]; then
+    echo "Hostname/IP tidak boleh kosong."
+    return
+  fi
+
+  read -p "Port PostgreSQL (default 5432): " DB_PORT
+  DB_PORT=${DB_PORT:-5432}
+
+  echo ""
+  echo "Langkah 1: Cek ping ke $DB_HOST ..."
+  if command -v ping >/dev/null 2>&1; then
+    ping -c 4 "$DB_HOST" || echo "Ping gagal (bisa jadi ICMP diblok, belum tentu DB down)."
+  else
+    echo "Perintah ping tidak ditemukan."
+  fi
+
+  echo ""
+  echo "Langkah 2: Cek port TCP $DB_PORT di $DB_HOST ..."
+  if command -v nc >/dev/null 2>&1; then
+    nc -zv "$DB_HOST" "$DB_PORT" && echo "Port $DB_PORT TERBUKA." || echo "Port $DB_PORT TERTUTUP atau tidak bisa dijangkau."
+  elif command -v telnet >/dev/null 2>&1; then
+    echo "Menggunakan telnet untuk cek port (Ctrl+] lalu quit untuk keluar jika tersambung)..."
+    telnet "$DB_HOST" "$DB_PORT" || echo "Telnet gagal membuka koneksi ke port $DB_PORT."
+  else
+    echo "nc/telnet tidak ditemukan, lewati cek port."
+  fi
+
+  echo ""
+  read -p "Coba test login PostgreSQL dengan psql dari mesin ini? (y/n, default n): " TEST_PSQL
+  TEST_PSQL=${TEST_PSQL:-n}
+
+  if [ "$TEST_PSQL" = "y" ] || [ "$TEST_PSQL" = "Y" ]; then
+    if ! command -v psql >/dev/null 2>&1; then
+      echo "psql tidak ditemukan. Instal paket postgresql-client terlebih dahulu."
+      return
+    fi
+
+    read -p "Nama database (default postgres): " TEST_DB_NAME
+    TEST_DB_NAME=${TEST_DB_NAME:-postgres}
+    read -p "User PostgreSQL (default postgres): " TEST_DB_USER
+    TEST_DB_USER=${TEST_DB_USER:-postgres}
+    read -s -p "Password untuk user $TEST_DB_USER: " TEST_DB_PASS
+    echo ""
+
+    echo "Menjalankan: SELECT 1 sebagai test koneksi..."
+    PGPASSWORD="$TEST_DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$TEST_DB_USER" -d "$TEST_DB_NAME" -c "SELECT 1;" && \
+      echo "Koneksi PostgreSQL BERHASIL." || echo "Koneksi PostgreSQL GAGAL. Cek kembali pg_hba.conf, user, dan password."
+  fi
+
+  echo ""
+  echo "Wizard cek koneksi selesai."
+}
+
 diagnose_pm2_simple() {
   echo "=== Diagnosa PM2 ==="
   if command -v pm2 >/dev/null 2>&1; then
@@ -984,6 +1049,7 @@ menu_diagnosa() {
     echo "4. Diagnosa Database"
     echo "5. Diagnosa Nginx"
     echo "6. Diagnosa Redis"
+   echo "7. Wizard cek koneksi ke server PostgreSQL"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -1037,6 +1103,10 @@ menu_diagnosa() {
         ;;
       6)
         diagnose_redis
+        pause
+        ;;
+      7)
+        wizard_cek_koneksi_db
         pause
         ;;
       0)
