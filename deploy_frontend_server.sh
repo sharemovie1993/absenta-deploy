@@ -30,6 +30,9 @@ if ! command -v serve >/dev/null 2>&1; then
   npm install -g serve
 fi
 
+echo "Mengkonfigurasi PM2 agar auto-start saat reboot..."
+pm2 startup systemd -u root --hp /root || true
+
 mkdir -p "$APP_ROOT"
 
 if [ ! -d "$FRONTEND_DIR/.git" ]; then
@@ -61,4 +64,3 @@ fi
 pm2 save
 
 echo "Frontend server siap berjalan."
-
