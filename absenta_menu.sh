@@ -196,10 +196,76 @@ db_show_size() {
 }
 
 menu_db_server() {
+db_set_superuser_password() {
+  if ! command -v psql >/dev/null 2>&1; then
+    echo "psql tidak ditemukan di PATH."
+    return
+  fi
+  read -p "Nama role superuser (default postgres): " DB_SUPERUSER
+  DB_SUPERUSER=${DB_SUPERUSER:-postgres}
+  read -s -p "Password baru untuk role $DB_SUPERUSER: " DB_PASS
+  echo ""
+  if [ -z "$DB_PASS" ]; then
+    echo "Password tidak boleh kosong."
+    return
+  fi
+  ESCAPED_PASS=${DB_PASS//\'/\'\'}
+  echo "Mengatur password untuk role $DB_SUPERUSER ..."
+  sudo -u postgres psql -c "ALTER ROLE \"$DB_SUPERUSER\" WITH PASSWORD '$ESCAPED_PASS';" || echo "Gagal mengatur password role $DB_SUPERUSER."
+}
+
+db_reset_user_password() {
+  if ! command -v psql >/dev/null 2>&1; then
+    echo "psql tidak ditemukan di PATH."
+    return
+  fi
+  read -p "Nama user database yang akan di-reset password-nya: " DB_USER
+  if [ -z "$DB_USER" ]; then
+    echo "Nama user tidak boleh kosong."
+    return
+  fi
+  read -s -p "Password baru untuk user $DB_USER: " DB_PASS
+  echo ""
+  if [ -z "$DB_PASS" ]; then
+    echo "Password tidak boleh kosong."
+    return
+  fi
+  ESCAPED_PASS=${DB_PASS//\'/\'\'}
+  echo "Mengatur password baru untuk user $DB_USER ..."
+  sudo -u postgres psql -c "ALTER ROLE \"$DB_USER\" WITH PASSWORD '$ESCAPED_PASS';" || echo "Gagal mengatur password user $DB_USER."
+}
+
+db_tune_production() {
+  CONF_PATH=$(find /etc/postgresql -maxdepth 3 -type f -name 'postgresql.conf' 2>/dev/null | head -n1)
+  if [ -z "$CONF_PATH" ] || [ ! -f "$CONF_PATH" ]; then
+    echo "postgresql.conf tidak ditemukan di /etc/postgresql."
+    return
+  fi
+  echo "postgresql.conf terdeteksi di: $CONF_PATH"
+  read -p "max_connections (default 200): " MAX_CONN
+  MAX_CONN=${MAX_CONN:-200}
+  read -p "shared_buffers (default 1GB, contoh 512MB/2GB): " SHARED_BUFFERS
+  SHARED_BUFFERS=${SHARED_BUFFERS:-1GB}
+  read -p "work_mem (default 16MB): " WORK_MEM
+  WORK_MEM=${WORK_MEM:-16MB}
+  TS="$(date +%Y%m%d%H%M%S)"
+  cp "$CONF_PATH" "${CONF_PATH}.bak_tuning_$TS" || { echo "Gagal membuat backup $CONF_PATH"; return; }
+  cat >> "$CONF_PATH" <<EOF
+
+# absenta production tuning
+max_connections = $MAX_CONN
+shared_buffers = $SHARED_BUFFERS
+work_mem = $WORK_MEM
+EOF
+  echo "Konfigurasi tuning ditambahkan ke $CONF_PATH"
+  db_restart
+}
+
   while true; do
     clear
     echo "=== 3. Database Server (PostgreSQL) ==="
     echo "3.1 Deploy PostgreSQL server"
+    echo "3.2 Setup/konfigurasi DB untuk aplikasi"
     echo "3.2 Setup/konfigurasi DB untuk aplikasi"
     echo "3.3 Status database"
     echo "3.4 Lihat konfigurasi database"
@@ -207,6 +273,9 @@ menu_db_server() {
     echo "3.6 Backup database"
     echo "3.7 Restore database dari backup"
     echo "3.8 Lihat ukuran database/tabel"
+    echo "3.9 Set password superuser postgres"
+    echo "3.10 Reset password user database"
+    echo "3.11 Tuning produksi (max_connections, shared_buffers, work_mem)"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -240,6 +309,18 @@ menu_db_server() {
         ;;
       8|3.8)
         db_show_size
+        pause
+        ;;
+      9|3.9)
+        db_set_superuser_password
+        pause
+        ;;
+      10|3.10)
+        db_reset_user_password
+        pause
+        ;;
+      11|3.11)
+        db_tune_production
         pause
         ;;
       0)
@@ -610,27 +691,40 @@ EOF
 
 disable_dhcp_config() {
   ensure_netplan_available || return
-  echo "=== Disable DHCP4 di semua file netplan ==="
-  echo "Tindakan ini akan mengubah 'dhcp4: true' menjadi 'dhcp4: false' di:"
-  echo "  /etc/netplan/*.yaml"
-  read -p "Lanjut nonaktifkan DHCP4 di semua file netplan? (y/n, default n): " DISABLE_ALL
-  DISABLE_ALL=${DISABLE_ALL:-n}
-  case "$DISABLE_ALL" in
+  echo "=== Disable DHCP4 (netplan) ==="
+  echo "Daftar file netplan saat ini:"
+  ls -1 /etc/netplan 2>/dev/null || echo "Tidak ada file di /etc/netplan"
+  echo ""
+  echo "Langkah 1: Set dhcp4: false di semua file netplan yang ada."
+  for file in /etc/netplan/*.yaml; do
+    if [ -f "$file" ]; then
+      TS="$(date +%Y%m%d%H%M%S)"
+      cp "$file" "${file}.bak_$TS" || true
+      sed -i 's/dhcp4:[ ]*true/dhcp4: false/g' "$file" || echo "Gagal mengubah $file"
+    fi
+  done
+  echo ""
+  echo "Status dhcp4 di file netplan setelah perubahan:"
+  grep -n 'dhcp4:' /etc/netplan/*.yaml 2>/dev/null || echo "Tidak ada baris dhcp4 lagi di file .yaml."
+  echo ""
+  read -p "Nonaktifkan file netplan lain selain 60-absenta-network.yaml (rename menjadi .disabled)? (y/n, default n): " DISABLE_OTHERS
+  DISABLE_OTHERS=${DISABLE_OTHERS:-n}
+  case "$DISABLE_OTHERS" in
     y|Y)
       for file in /etc/netplan/*.yaml; do
-        if [ -f "$file" ]; then
+        if [ -f "$file" ] && [ "$file" != "/etc/netplan/60-absenta-network.yaml" ]; then
           TS="$(date +%Y%m%d%H%M%S)"
-          cp "$file" "${file}.bak_$TS" || true
-          sed -i 's/dhcp4:[ ]*true/dhcp4: false/g' "$file" || echo "Gagal mengubah $file"
+          cp "$file" "${file}.bak_disable_$TS" || true
+          mv "$file" "${file}.disabled" || echo "Gagal rename $file"
         fi
       done
-      netplan apply || echo "Gagal menjalankan netplan apply. Silakan cek konfigurasi."
-      restart_network_services
       ;;
     *)
-      echo "Batal menonaktifkan DHCP4."
+      echo "File netplan lain dibiarkan aktif."
       ;;
   esac
+  netplan apply || echo "Gagal menjalankan netplan apply. Silakan cek konfigurasi."
+  restart_network_services
 }
 
 show_current_ip() {
