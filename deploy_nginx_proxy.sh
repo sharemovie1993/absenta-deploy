@@ -30,6 +30,11 @@ DEFAULT_CERT_DOMAIN=$(echo "$FRONTEND_DOMAIN" | awk '{print $NF}' | sed 's/^\*\.
 read -p "Base domain sertifikat SSL (default ${DEFAULT_CERT_DOMAIN}): " CERT_DOMAIN
 CERT_DOMAIN=${CERT_DOMAIN:-$DEFAULT_CERT_DOMAIN}
 
+FRONTEND_SERVER_NAME="$FRONTEND_DOMAIN"
+if ! echo "$FRONTEND_SERVER_NAME" | grep -qw "$CERT_DOMAIN"; then
+  FRONTEND_SERVER_NAME="$FRONTEND_SERVER_NAME $CERT_DOMAIN"
+fi
+
 if [ "$NGINX_MODE" = "1" ] || [ "$NGINX_MODE" = "2" ]; then
   read -p "Port backend internal default untuk API (default ${BACKEND_PORT_DEFAULT}): " BACKEND_PORT_INPUT
   BACKEND_PORT_DEFAULT=${BACKEND_PORT_INPUT:-$BACKEND_PORT_DEFAULT}
@@ -136,13 +141,13 @@ server {
 
 server {
   listen 80;
-  server_name ${FRONTEND_DOMAIN};
+  server_name ${FRONTEND_SERVER_NAME};
   return 301 https://\$host\$request_uri;
 }
 
 server {
   listen 443 ssl http2;
-  server_name ${FRONTEND_DOMAIN};
+  server_name ${FRONTEND_SERVER_NAME};
 
   ssl_certificate /etc/letsencrypt/live/${CERT_DOMAIN}/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/${CERT_DOMAIN}/privkey.pem;
@@ -326,14 +331,14 @@ server {
 
 server {
   listen 80;
-  server_name ${FRONTEND_DOMAIN};
+  server_name ${FRONTEND_SERVER_NAME};
 
   return 301 https://\$host\$request_uri;
 }
 
 server {
   listen 443 ssl http2;
-  server_name ${FRONTEND_DOMAIN};
+  server_name ${FRONTEND_SERVER_NAME};
 
   ssl_certificate /etc/letsencrypt/live/${CERT_DOMAIN}/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/${CERT_DOMAIN}/privkey.pem;
@@ -512,14 +517,14 @@ server {
 
 server {
   listen 80;
-  server_name ${FRONTEND_DOMAIN};
+  server_name ${FRONTEND_SERVER_NAME};
 
   return 301 https://\$host\$request_uri;
 }
 
 server {
   listen 443 ssl http2;
-  server_name ${FRONTEND_DOMAIN};
+  server_name ${FRONTEND_SERVER_NAME};
 
   ssl_certificate /etc/letsencrypt/live/${CERT_DOMAIN}/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/${CERT_DOMAIN}/privkey.pem;
