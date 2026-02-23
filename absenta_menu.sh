@@ -534,59 +534,324 @@ menu_pm2() {
   done
 }
 
-while true; do
-  clear
-  echo "===== ABSENTA DEPLOY MENU ====="
-  echo "1. App Server (backend + frontend)"
-  echo "2. Backend / Frontend terpisah"
+select_server_profile() {
+  echo "===== Deteksi Lingkungan Server ====="
+  if command -v nginx >/dev/null 2>&1; then
+    echo "- nginx terdeteksi di server ini."
+  else
+    echo "- nginx TIDAK terdeteksi."
+  fi
+
+  if command -v pm2 >/dev/null 2>&1; then
+    echo "- pm2 terdeteksi di server ini."
+  else
+    echo "- pm2 TIDAK terdeteksi."
+  fi
+
+  if command -v redis-cli >/dev/null 2>&1; then
+    echo "- redis-cli terdeteksi (kemungkinan server Redis atau client Redis)."
+  else
+    echo "- redis-cli TIDAK terdeteksi."
+  fi
+
+  if command -v psql >/dev/null 2>&1; then
+    echo "- psql terdeteksi (kemungkinan server PostgreSQL atau client PostgreSQL)."
+  else
+    echo "- psql TIDAK terdeteksi."
+  fi
+
+  if command -v wg >/dev/null 2>&1 || [ -d /etc/wireguard ]; then
+    echo "- WireGuard terdeteksi."
+  else
+    echo "- WireGuard TIDAK terdeteksi."
+  fi
+
+  echo ""
+  echo "===== Pilih Profil Lingkungan Server Ini ====="
+  echo "1. App Server (Nginx + Backend + Frontend di server ini)"
+  echo "2. Backend / Frontend saja (tanpa Nginx reverse proxy utama)"
   echo "3. Database Server (PostgreSQL)"
   echo "4. Redis Server"
-  echo "5. Worker Server"
-  echo "6. Nginx Reverse Proxy"
-  echo "7. WireGuard VPN"
-  echo "8. Keamanan Server (Hardening)"
-  echo "9. Diagnostik & Report"
-  echo "10. PM2 & Monitoring Proses"
-  echo "0. Keluar"
-  read -p "Pilih menu: " main_choice
-  case "$main_choice" in
-    1)
-      menu_app_server
-      ;;
-    2)
-      menu_backend_frontend
-      ;;
-    3)
-      menu_db_server
-      ;;
-    4)
-      menu_redis_server
-      ;;
-    5)
-      menu_worker_server
-      ;;
-    6)
-      menu_nginx
-      ;;
-    7)
-      menu_wireguard
-      ;;
-    8)
-      menu_security
-      ;;
-    9)
-      menu_diagnostics
-      ;;
-    10)
-      menu_pm2
-      ;;
-    0)
-      echo "Keluar."
-      exit 0
-      ;;
-    *)
-      echo "Pilihan tidak dikenal"
-      pause
-      ;;
+  echo "5. WireGuard / VPN Gateway"
+  echo "6. Mode Umum (tampilkan semua menu)"
+  read -p "Pilih profil server (default 6): " PROFILE_CHOICE
+  PROFILE_CHOICE=${PROFILE_CHOICE:-6}
+
+  case "$PROFILE_CHOICE" in
+    1) SERVER_PROFILE="app" ;;
+    2) SERVER_PROFILE="backend_frontend" ;;
+    3) SERVER_PROFILE="db" ;;
+    4) SERVER_PROFILE="redis" ;;
+    5) SERVER_PROFILE="vpn" ;;
+    *) SERVER_PROFILE="general" ;;
   esac
-done
+}
+
+main_menu_app() {
+  while true; do
+    clear
+    echo "===== ABSENTA MENU – App Server ====="
+    echo "1. Deploy/Update App Server (backend + frontend)"
+    echo "2. Nginx Reverse Proxy"
+    echo "3. WireGuard VPN"
+    echo "4. Diagnostik & Report"
+    echo "5. PM2 & Monitoring Proses"
+    echo "6. Keamanan Server (Hardening)"
+    echo "0. Keluar"
+    read -p "Pilih menu: " choice
+    case "$choice" in
+      1)
+        menu_app_server
+        ;;
+      2)
+        menu_nginx
+        ;;
+      3)
+        menu_wireguard
+        ;;
+      4)
+        menu_diagnostics
+        ;;
+      5)
+        menu_pm2
+        ;;
+      6)
+        menu_security
+        ;;
+      0)
+        echo "Keluar."
+        exit 0
+        ;;
+      *)
+        echo "Pilihan tidak dikenal"
+        pause
+        ;;
+    esac
+  done
+}
+
+main_menu_backend_frontend() {
+  while true; do
+    clear
+    echo "===== ABSENTA MENU – Backend / Frontend Server ====="
+    echo "1. Deploy Backend / Frontend terpisah"
+    echo "2. Worker Server"
+    echo "3. WireGuard VPN"
+    echo "4. Diagnostik & Report"
+    echo "5. PM2 & Monitoring Proses"
+    echo "6. Keamanan Server (Hardening)"
+    echo "0. Keluar"
+    read -p "Pilih menu: " choice
+    case "$choice" in
+      1)
+        menu_backend_frontend
+        ;;
+      2)
+        menu_worker_server
+        ;;
+      3)
+        menu_wireguard
+        ;;
+      4)
+        menu_diagnostics
+        ;;
+      5)
+        menu_pm2
+        ;;
+      6)
+        menu_security
+        ;;
+      0)
+        echo "Keluar."
+        exit 0
+        ;;
+      *)
+        echo "Pilihan tidak dikenal"
+        pause
+        ;;
+    esac
+  done
+}
+
+main_menu_db() {
+  while true; do
+    clear
+    echo "===== ABSENTA MENU – Database Server ====="
+    echo "1. Deploy PostgreSQL server"
+    echo "2. WireGuard VPN"
+    echo "3. Diagnostik & Report (fokus DB/Redis/Network)"
+    echo "4. Keamanan Server (Hardening)"
+    echo "0. Keluar"
+    read -p "Pilih menu: " choice
+    case "$choice" in
+      1)
+        menu_db_server
+        ;;
+      2)
+        menu_wireguard
+        ;;
+      3)
+        menu_diagnostics
+        ;;
+      4)
+        menu_security
+        ;;
+      0)
+        echo "Keluar."
+        exit 0
+        ;;
+      *)
+        echo "Pilihan tidak dikenal"
+        pause
+        ;;
+    esac
+  done
+}
+
+main_menu_redis() {
+  while true; do
+    clear
+    echo "===== ABSENTA MENU – Redis Server ====="
+    echo "1. Deploy Redis server"
+    echo "2. WireGuard VPN"
+    echo "3. Diagnostik & Report (Redis/Network)"
+    echo "4. Keamanan Server (Hardening)"
+    echo "0. Keluar"
+    read -p "Pilih menu: " choice
+    case "$choice" in
+      1)
+        menu_redis_server
+        ;;
+      2)
+        menu_wireguard
+        ;;
+      3)
+        menu_diagnostics
+        ;;
+      4)
+        menu_security
+        ;;
+      0)
+        echo "Keluar."
+        exit 0
+        ;;
+      *)
+        echo "Pilihan tidak dikenal"
+        pause
+        ;;
+    esac
+  done
+}
+
+main_menu_vpn() {
+  while true; do
+    clear
+    echo "===== ABSENTA MENU – WireGuard / VPN Gateway ====="
+    echo "1. WireGuard VPN (setup, tambah/hapus client, debug)"
+    echo "2. Diagnostik & Report (network, ping, dll)"
+    echo "3. Keamanan Server (Hardening)"
+    echo "0. Keluar"
+    read -p "Pilih menu: " choice
+    case "$choice" in
+      1)
+        menu_wireguard
+        ;;
+      2)
+        menu_diagnostics
+        ;;
+      3)
+        menu_security
+        ;;
+      0)
+        echo "Keluar."
+        exit 0
+        ;;
+      *)
+        echo "Pilihan tidak dikenal"
+        pause
+        ;;
+    esac
+  done
+}
+
+main_menu_general() {
+  while true; do
+    clear
+    echo "===== ABSENTA DEPLOY MENU – Mode Umum ====="
+    echo "1. App Server (backend + frontend)"
+    echo "2. Backend / Frontend terpisah"
+    echo "3. Database Server (PostgreSQL)"
+    echo "4. Redis Server"
+    echo "5. Worker Server"
+    echo "6. Nginx Reverse Proxy"
+    echo "7. WireGuard VPN"
+    echo "8. Keamanan Server (Hardening)"
+    echo "9. Diagnostik & Report"
+    echo "10. PM2 & Monitoring Proses"
+    echo "0. Keluar"
+    read -p "Pilih menu: " main_choice
+    case "$main_choice" in
+      1)
+        menu_app_server
+        ;;
+      2)
+        menu_backend_frontend
+        ;;
+      3)
+        menu_db_server
+        ;;
+      4)
+        menu_redis_server
+        ;;
+      5)
+        menu_worker_server
+        ;;
+      6)
+        menu_nginx
+        ;;
+      7)
+        menu_wireguard
+        ;;
+      8)
+        menu_security
+        ;;
+      9)
+        menu_diagnostics
+        ;;
+      10)
+        menu_pm2
+        ;;
+      0)
+        echo "Keluar."
+        exit 0
+        ;;
+      *)
+        echo "Pilihan tidak dikenal"
+        pause
+        ;;
+    esac
+  done
+}
+
+select_server_profile
+
+case "$SERVER_PROFILE" in
+  app)
+    main_menu_app
+    ;;
+  backend_frontend)
+    main_menu_backend_frontend
+    ;;
+  db)
+    main_menu_db
+    ;;
+  redis)
+    main_menu_redis
+    ;;
+  vpn)
+    main_menu_vpn
+    ;;
+  *)
+    main_menu_general
+    ;;
+esac
