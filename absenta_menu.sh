@@ -445,6 +445,95 @@ menu_diagnostics() {
   done
 }
 
+menu_pm2() {
+  while true; do
+    clear
+    echo "=== 10. PM2 & Monitoring Proses ==="
+    echo "10.1 Lihat daftar proses PM2"
+    echo "10.2 Restart proses tertentu"
+    echo "10.3 Restart semua proses"
+    echo "10.4 Stop semua proses"
+    echo "10.5 Tampilkan log proses tertentu (100 baris terakhir)"
+    echo "10.6 Simpan dan pastikan PM2 autostart (pm2 save + startup)"
+    echo "0. Kembali"
+    read -p "Pilih: " choice
+    case "$choice" in
+      1|10.1)
+        if command -v pm2 >/dev/null 2>&1; then
+          pm2 list || true
+        else
+          echo "pm2 tidak ditemukan di PATH."
+        fi
+        pause
+        ;;
+      2|10.2)
+        if ! command -v pm2 >/dev/null 2>&1; then
+          echo "pm2 tidak ditemukan di PATH."
+          pause
+        else
+          pm2 list || true
+          read -p "Masukkan nama atau id proses PM2 yang akan direstart: " PM2_NAME
+          if [ -n "$PM2_NAME" ]; then
+            pm2 restart "$PM2_NAME" || echo "Gagal restart proses PM2 $PM2_NAME"
+          else
+            echo "Nama/id proses kosong, batal."
+          fi
+          pause
+        fi
+        ;;
+      3|10.3)
+        if command -v pm2 >/dev/null 2>&1; then
+          pm2 restart all || echo "Gagal restart semua proses PM2."
+        else
+          echo "pm2 tidak ditemukan di PATH."
+        fi
+        pause
+        ;;
+      4|10.4)
+        if command -v pm2 >/dev/null 2>&1; then
+          pm2 stop all || echo "Gagal stop semua proses PM2."
+        else
+          echo "pm2 tidak ditemukan di PATH."
+        fi
+        pause
+        ;;
+      5|10.5)
+        if ! command -v pm2 >/dev/null 2>&1; then
+          echo "pm2 tidak ditemukan di PATH."
+          pause
+        else
+          pm2 list || true
+          read -p "Masukkan nama atau id proses PM2 untuk lihat log: " PM2_NAME
+          if [ -n "$PM2_NAME" ]; then
+            pm2 logs "$PM2_NAME" --lines 100 || echo "Gagal menampilkan log proses $PM2_NAME"
+          else
+            echo "Nama/id proses kosong, batal."
+          fi
+          pause
+        fi
+        ;;
+      6|10.6)
+        if command -v pm2 >/dev/null 2>&1; then
+          pm2 save || echo "Gagal menjalankan pm2 save."
+          if command -v systemctl >/dev/null 2>&1; then
+            pm2 startup systemd -u root --hp /root || true
+          fi
+        else
+          echo "pm2 tidak ditemukan di PATH."
+        fi
+        pause
+        ;;
+      0)
+        break
+        ;;
+      *)
+        echo "Pilihan tidak dikenal"
+        pause
+        ;;
+    esac
+  done
+}
+
 while true; do
   clear
   echo "===== ABSENTA DEPLOY MENU ====="
@@ -457,6 +546,7 @@ while true; do
   echo "7. WireGuard VPN"
   echo "8. Keamanan Server (Hardening)"
   echo "9. Diagnostik & Report"
+  echo "10. PM2 & Monitoring Proses"
   echo "0. Keluar"
   read -p "Pilih menu: " main_choice
   case "$main_choice" in
@@ -486,6 +576,9 @@ while true; do
       ;;
     9)
       menu_diagnostics
+      ;;
+    10)
+      menu_pm2
       ;;
     0)
       echo "Keluar."
