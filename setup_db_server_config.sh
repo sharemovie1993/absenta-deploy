@@ -40,7 +40,15 @@ else
   echo "Database $DB_NAME sudah ada, lewati pembuatan database."
 fi
 
-read -p "Izinkan koneksi dari IP tertentu (bukan hanya localhost)? (y/n, default n): " ALLOW_REMOTE
+echo ""
+echo "=== Konfigurasi Akses Jarak Jauh PostgreSQL ==="
+echo "Secara default PostgreSQL hanya menerima koneksi dari dirinya sendiri (localhost/127.0.0.1)."
+echo "Jika Anda ingin terhubung dari komputer lain (mis. pgAdmin di 10.10.10.250),"
+echo "maka server harus:"
+echo "  1) \"listen\" di IP jaringan (listen_addresses = '*'), dan"
+echo "  2) memiliki aturan pg_hba.conf yang mengizinkan IP tersebut."
+echo "Langkah ini TIDAK membuka akses ke semua orang; hanya IP/CIDR yang Anda tulis yang diizinkan."
+read -p "Aktifkan akses dari IP lain (bukan hanya localhost)? (y/n, default n): " ALLOW_REMOTE
 ALLOW_REMOTE=${ALLOW_REMOTE:-n}
 
 PG_HBA="/etc/postgresql" 
@@ -69,6 +77,7 @@ if [ "$ALLOW_REMOTE" = "y" ] || [ "$ALLOW_REMOTE" = "Y" ]; then
       if [ -n "$APP_CIDR" ]; then
         echo "Menambahkan aturan di pg_hba.conf untuk $APP_CIDR..."
         echo "host    ${DB_NAME}    ${DB_USER}    ${APP_CIDR}    md5" >> "$PG_HBA_CONF"
+        echo "host    postgres    postgres    ${APP_CIDR}    md5" >> "$PG_HBA_CONF"
       else
         echo "CIDR kosong, lewati perubahan pg_hba.conf."
       fi
@@ -80,4 +89,3 @@ systemctl restart postgresql
 
 echo "Setup / konfigurasi database server untuk aplikasi selesai."
 echo "Database: $DB_NAME, User: $DB_USER"
-
