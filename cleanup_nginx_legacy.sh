@@ -112,15 +112,32 @@ while true; do
 
   case "$ACTION" in
     1)
-      echo "Membackup ke: $BACKUP_PATH"
-      cp -a "$SELECTED" "$BACKUP_PATH"
-      if [ "$SELECTED" = "$CANONICAL_CONF" ]; then
-        echo "Hanya backup CANONICAL, tidak menghapus dari sites-enabled."
-      else
-        if [ "$SELECTED" = "${NGINX_SITES_ENABLED}/${BASENAME}" ] && [ -L "$SELECTED" ]; then
-          rm -f "$SELECTED"
-          echo "Symlink $SELECTED dihapus dari sites-enabled."
+      # Backup + disable: pindahkan file utama ke backup dan hapus semua symlink terkait
+      TARGET_PATH="$SELECTED"
+      if [ -L "$SELECTED" ]; then
+        REAL_PATH="$(readlink -f "$SELECTED" || echo "")"
+        if [ -n "$REAL_PATH" ] && [ -f "$REAL_PATH" ]; then
+          TARGET_PATH="$REAL_PATH"
         fi
+      fi
+
+      if [ -f "$TARGET_PATH" ]; then
+        echo "Memindahkan konfigurasi utama ke: $BACKUP_PATH"
+        mv "$TARGET_PATH" "$BACKUP_PATH"
+      else
+        echo "Peringatan: file utama $TARGET_PATH tidak ditemukan saat ingin dipindahkan."
+      fi
+
+      # Hapus symlink terpilih jika ada
+      if [ -L "$SELECTED" ]; then
+        rm -f "$SELECTED"
+        echo "Symlink $SELECTED dihapus."
+      fi
+
+      # Hapus symlink di sites-enabled yang bernama sama
+      if [ -L "${NGINX_SITES_ENABLED}/${BASENAME}" ]; then
+        rm -f "${NGINX_SITES_ENABLED}/${BASENAME}"
+        echo "Symlink ${NGINX_SITES_ENABLED}/${BASENAME} dihapus dari sites-enabled."
       fi
       ;;
     2)
@@ -166,4 +183,3 @@ if nginx -t; then
 else
   echo "nginx -t gagal. Mohon periksa file konfigurasi sebelum reload service."
 fi
-
