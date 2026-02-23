@@ -37,9 +37,36 @@ echo "Public key client:"
 echo "$CLIENT_PUBLIC_KEY"
 
 read -p "Alamat IP client di jaringan VPN (contoh 10.8.0.2/32): " CLIENT_ADDRESS
+
+if [ -z "$CLIENT_ADDRESS" ]; then
+  echo "Alamat IP client wajib diisi."
+  exit 1
+fi
+
 read -p "Public key server: " SERVER_PUBLIC_KEY
-read -p "Endpoint server (host:port, contoh vpn.example.com:51820): " SERVER_ENDPOINT
-read -p "Allowed IPs (contoh 10.8.0.0/24 atau 0.0.0.0/0): " ALLOWED_IPS
+
+if [ -z "$SERVER_PUBLIC_KEY" ]; then
+  echo "Public key server wajib diisi."
+  exit 1
+fi
+
+while true; do
+  read -p "Endpoint server (host:port, contoh vpn.example.com:51820): " SERVER_ENDPOINT
+  if [ -n "$SERVER_ENDPOINT" ]; then
+    break
+  fi
+  echo "Endpoint server tidak boleh kosong."
+done
+
+CLIENT_IP_ONLY=$(echo "$CLIENT_ADDRESS" | cut -d'/' -f1)
+CLIENT_BASE_NET=$(echo "$CLIENT_IP_ONLY" | awk -F. '{print $1"."$2"."$3".0"}')
+SUGGEST_ALLOWED="${CLIENT_BASE_NET}/24"
+
+read -p "Allowed IPs (default ${SUGGEST_ALLOWED}): " ALLOWED_IPS
+if [ -z "$ALLOWED_IPS" ]; then
+  ALLOWED_IPS="$SUGGEST_ALLOWED"
+fi
+
 read -p "DNS untuk interface ini (opsional, contoh 1.1.1.1): " DNS_ADDR
 
 umask 077
@@ -69,4 +96,3 @@ echo "Status WireGuard:"
 wg show "$WG_IFACE" || true
 
 echo "Setup WireGuard client selesai."
-
