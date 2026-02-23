@@ -68,12 +68,77 @@ menu_backend_frontend() {
   done
 }
 
+db_status() {
+  echo "Status service PostgreSQL:"
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl status postgresql --no-pager -l | head -n 20 || echo "Gagal membaca status service postgresql."
+  else
+    echo "systemctl tidak tersedia."
+  fi
+  if command -v psql >/dev/null 2>&1; then
+    echo ""
+    echo "Informasi versi dan database aktif:"
+    sudo -u postgres psql -tAc "SELECT version();" || echo "Gagal mengambil versi PostgreSQL."
+    sudo -u postgres psql -lqt | head -n 10 || echo "Gagal menampilkan daftar database."
+  else
+    echo "psql tidak ditemukan di PATH."
+  fi
+}
+
+db_show_config() {
+  CONF_PATH=$(find /etc/postgresql -maxdepth 3 -type f -name 'postgresql.conf' 2>/dev/null | head -n1)
+  if [ -z "$CONF_PATH" ] || [ ! -f "$CONF_PATH" ]; then
+    echo "postgresql.conf tidak ditemukan di /etc/postgresql."
+    return
+  fi
+  HBA_PATH="$(dirname "$CONF_PATH")/pg_hba.conf"
+  echo "postgresql.conf: $CONF_PATH"
+  sed -n '1,120p' "$CONF_PATH" || true
+  echo ""
+  if [ -f "$HBA_PATH" ]; then
+    echo "pg_hba.conf: $HBA_PATH"
+    sed -n '1,80p' "$HBA_PATH" || true
+  else
+    echo "pg_hba.conf tidak ditemukan berdampingan dengan postgresql.conf."
+  fi
+}
+
+db_restart() {
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl restart postgresql || echo "Gagal restart service postgresql."
+    systemctl status postgresql --no-pager -l | head -n 15 || true
+  else
+    echo "systemctl tidak tersedia, tidak bisa restart postgresql."
+  fi
+}
+
+db_backup() {
+  if ! command -v pg_dump >/dev/null 2>&1; then
+    echo "pg_dump tidak ditemukan. Pastikan paket postgresql-client terpasang."
+    return
+  fi
+  read -p "Nama database yang akan di-backup (default absensi): " BK_DB_NAME
+  BK_DB_NAME=${BK_DB_NAME:-absensi}
+  read -p "Direktori tujuan backup (default /var/backups/postgresql): " BK_DIR
+  BK_DIR=${BK_DIR:-/var/backups/postgresql}
+  mkdir -p "$BK_DIR" || { echo "Gagal membuat direktori $BK_DIR"; return; }
+  TS="$(date +%Y%m%d%H%M%S)"
+  BK_FILE="${BK_DIR}/${BK_DB_NAME}_${TS}.dump"
+  echo "Membuat backup database $BK_DB_NAME ke $BK_FILE"
+  sudo -u postgres pg_dump -Fc "$BK_DB_NAME" > "$BK_FILE" || { echo "Backup gagal."; rm -f "$BK_FILE"; return; }
+  echo "Backup selesai."
+}
+
 menu_db_server() {
   while true; do
     clear
     echo "=== 3. Database Server (PostgreSQL) ==="
     echo "3.1 Deploy PostgreSQL server"
     echo "3.2 Setup/konfigurasi DB untuk aplikasi"
+    echo "3.3 Status database"
+    echo "3.4 Lihat konfigurasi database"
+    echo "3.5 Restart database"
+    echo "3.6 Backup database"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -83,6 +148,22 @@ menu_db_server() {
         ;;
       2|3.2)
         bash "$SCRIPT_DIR/setup_db_server_config.sh"
+        pause
+        ;;
+      3|3.3)
+        db_status
+        pause
+        ;;
+      4|3.4)
+        db_show_config
+        pause
+        ;;
+      5|3.5)
+        db_restart
+        pause
+        ;;
+      6|3.6)
+        db_backup
         pause
         ;;
       0)
