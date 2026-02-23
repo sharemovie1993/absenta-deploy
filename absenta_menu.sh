@@ -438,7 +438,8 @@ menu_wireguard_server_side() {
     echo "=== WireGuard Server Side ==="
     echo "1. Tambah Client"
     echo "2. Hapus Client"
-    echo "3. Setup WireGuard Client di server aplikasi/DB/Redis"
+    echo "3. Edit Client"
+    echo "4. Setup WireGuard Client di server aplikasi/DB/Redis"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -451,6 +452,10 @@ menu_wireguard_server_side() {
         pause
         ;;
       3)
+        bash "$SCRIPT_DIR/edit_wireguard_client.sh"
+        pause
+        ;;
+      4)
         bash "$SCRIPT_DIR/setup_wireguard_client.sh"
         pause
         ;;
