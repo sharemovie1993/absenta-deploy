@@ -414,11 +414,16 @@ menu_nginx() {
     clear
     echo "=== 6. Nginx Reverse Proxy ==="
     echo "6.1 Deploy/Update Nginx reverse proxy untuk app/api"
+    echo "6.2 Backup/Hapus konfigurasi Nginx lama (cek konflik server_name)"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
       1|6.1)
         bash "$SCRIPT_DIR/deploy_nginx_proxy.sh"
+        pause
+        ;;
+      2|6.2)
+        bash "$SCRIPT_DIR/cleanup_nginx_legacy.sh"
         pause
         ;;
       0)
