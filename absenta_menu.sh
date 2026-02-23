@@ -470,6 +470,107 @@ menu_env_config() {
   done
 }
 
+configure_ip_dhcp() {
+  if ! command -v netplan >/dev/null 2>&1; then
+    echo "netplan tidak ditemukan. Hanya mendukung sistem dengan netplan."
+    return
+  fi
+  read -p "Nama interface network (contoh ens3): " IFACE
+  if [ -z "$IFACE" ]; then
+    echo "Nama interface tidak boleh kosong."
+    return
+  fi
+  NETPLAN_FILE="/etc/netplan/60-absenta-network.yaml"
+  if [ -f "$NETPLAN_FILE" ]; then
+    TS="$(date +%Y%m%d%H%M%S)"
+    cp "$NETPLAN_FILE" "${NETPLAN_FILE}.bak_$TS" || true
+  fi
+  cat > "$NETPLAN_FILE" <<EOF
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    $IFACE:
+      dhcp4: true
+EOF
+  echo "Konfigurasi tersimpan di $NETPLAN_FILE"
+  netplan apply || echo "Gagal menjalankan netplan apply. Silakan cek konfigurasi."
+}
+
+configure_ip_static() {
+  if ! command -v netplan >/dev/null 2>&1; then
+    echo "netplan tidak ditemukan. Hanya mendukung sistem dengan netplan."
+    return
+  fi
+  read -p "Nama interface network (contoh ens3): " IFACE
+  if [ -z "$IFACE" ]; then
+    echo "Nama interface tidak boleh kosong."
+    return
+  fi
+  read -p "Alamat IP dengan CIDR (contoh 192.168.1.10/24): " IP_CIDR
+  if [ -z "$IP_CIDR" ]; then
+    echo "Alamat IP tidak boleh kosong."
+    return
+  fi
+  read -p "Gateway (contoh 192.168.1.1): " GATEWAY
+  if [ -z "$GATEWAY" ]; then
+    echo "Gateway tidak boleh kosong."
+    return
+  fi
+  read -p "DNS server (dipisah spasi, contoh 8.8.8.8 1.1.1.1): " DNS_SERVERS
+  if [ -z "$DNS_SERVERS" ]; then
+    DNS_SERVERS="8.8.8.8 1.1.1.1"
+  fi
+  NETPLAN_FILE="/etc/netplan/60-absenta-network.yaml"
+  if [ -f "$NETPLAN_FILE" ]; then
+    TS="$(date +%Y%m%d%H%M%S)"
+    cp "$NETPLAN_FILE" "${NETPLAN_FILE}.bak_$TS" || true
+  fi
+  dns_list=$(printf "%s" "$DNS_SERVERS" | sed 's/ \+/, /g')
+  cat > "$NETPLAN_FILE" <<EOF
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    $IFACE:
+      addresses:
+        - $IP_CIDR
+      gateway4: $GATEWAY
+      nameservers:
+        addresses: [$dns_list]
+EOF
+  echo "Konfigurasi tersimpan di $NETPLAN_FILE"
+  netplan apply || echo "Gagal menjalankan netplan apply. Silakan cek konfigurasi."
+}
+
+menu_ip_config() {
+  while true; do
+    clear
+    echo "=== Konfigurasi IP Address ==="
+    echo "1. Set IP Dynamic (DHCP)"
+    echo "2. Set IP Static"
+    echo "0. Kembali"
+    read -p "Pilih: " choice
+    case "$choice" in
+      1)
+        configure_ip_dhcp
+        pause
+        ;;
+      2)
+        configure_ip_static
+        pause
+        ;;
+      0)
+        break
+        ;;
+      *)
+        echo "Pilihan tidak dikenal"
+        pause
+        ;;
+    esac
+  done
+}
+
 menu_security() {
   while true; do
     clear
@@ -1163,6 +1264,7 @@ while true; do
   echo "2. Diagnosa"
   echo "3. Konfigurasi Environment"
   echo "4. Keamanan Server (Hardening)"
+  echo "5. Konfigurasi IP Address"
   echo "0. Keluar"
   read -p "Pilih menu: " main_choice
   case "$main_choice" in
@@ -1177,6 +1279,9 @@ while true; do
       ;;
     4)
       menu_security
+      ;;
+    5)
+      menu_ip_config
       ;;
     0)
       echo "Keluar."
