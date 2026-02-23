@@ -73,11 +73,16 @@ menu_db_server() {
     clear
     echo "=== 3. Database Server (PostgreSQL) ==="
     echo "3.1 Deploy PostgreSQL server"
+    echo "3.2 Setup/konfigurasi DB untuk aplikasi"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
       1|3.1)
         bash "$SCRIPT_DIR/deploy_db_server.sh"
+        pause
+        ;;
+      2|3.2)
+        bash "$SCRIPT_DIR/setup_db_server_config.sh"
         pause
         ;;
       0)
@@ -747,11 +752,12 @@ menu_deploy() {
     echo "3. Frontend Only"
     echo "4. Worker"
     echo "5. Nginx Reverse Proxy"
-    echo "6. WireGuard VPN"
-    echo "7. Redis"
-    echo "8. PostgreSQL"
-    echo "9. Mail Server"
-    echo "10. Manajemen Paket"
+    echo "6. SSH Server"
+    echo "7. WireGuard VPN"
+    echo "8. Redis"
+    echo "9. PostgreSQL"
+    echo "10. Mail Server"
+    echo "11. Manajemen Paket"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -773,19 +779,23 @@ menu_deploy() {
         menu_nginx
         ;;
       6)
-        menu_wireguard
+        bash "$SCRIPT_DIR/deploy_ssh_server.sh"
+        pause
         ;;
       7)
-        menu_redis_server
+        menu_wireguard
         ;;
       8)
-        menu_db_server
+        menu_redis_server
         ;;
       9)
+        menu_db_server
+        ;;
+      10)
         bash "$SCRIPT_DIR/deploy_mail_server.sh"
         pause
         ;;
-      10)
+      11)
         menu_packages
         ;;
       0)
