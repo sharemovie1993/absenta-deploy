@@ -131,3 +131,7 @@ fi
 pm2 save
 
 echo "App server siap dengan backend dan frontend berjalan."
+echo ""
+echo "Catatan: Setelah deploy pertama kali, jalankan seed data awal:"
+echo "  - Via menu ABSENTA: Deploy -> PostgreSQL -> 3.12 Seed data awal (Prisma db seed)"
+echo "  - Atau manual: cd \"$BACKEND_DIR\" && npx prisma db seed"

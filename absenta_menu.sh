@@ -219,6 +219,9 @@ db_reset_user_password() {
     echo "psql tidak ditemukan di PATH."
     return
   fi
+  echo "Daftar user database saat ini:"
+  sudo -u postgres psql -t -c "SELECT usename FROM pg_user ORDER BY usename;" 2>/dev/null | awk 'NF {print "- "$1}' || echo "Gagal mengambil daftar user."
+  echo ""
   read -p "Nama user database yang akan di-reset password-nya: " DB_USER
   if [ -z "$DB_USER" ]; then
     echo "Nama user tidak boleh kosong."
@@ -261,11 +264,27 @@ EOF
   db_restart
 }
 
+db_seed_initial() {
+  APP_ROOT="${APP_ROOT:-/var/www/absenta}"
+  BACKEND_DIR="$APP_ROOT/backend"
+  if [ ! -d "$BACKEND_DIR" ]; then
+    echo "Direktori backend $BACKEND_DIR tidak ditemukan."
+    echo "Pastikan app server sudah dideploy terlebih dahulu."
+    return
+  fi
+  if ! command -v npx >/dev/null 2>&1; then
+    echo "npx tidak ditemukan. Pastikan Node.js dan npm sudah terpasang."
+    return
+  fi
+  cd "$BACKEND_DIR" || return
+  echo "Menjalankan seed data awal Prisma (npx prisma db seed) di $BACKEND_DIR ..."
+  npx prisma db seed || echo "Seed data awal gagal. Periksa log di atas."
+}
+
   while true; do
     clear
     echo "=== 3. Database Server (PostgreSQL) ==="
     echo "3.1 Deploy PostgreSQL server"
-    echo "3.2 Setup/konfigurasi DB untuk aplikasi"
     echo "3.2 Setup/konfigurasi DB untuk aplikasi"
     echo "3.3 Status database"
     echo "3.4 Lihat konfigurasi database"
@@ -276,6 +295,7 @@ EOF
     echo "3.9 Set password superuser postgres"
     echo "3.10 Reset password user database"
     echo "3.11 Tuning produksi (max_connections, shared_buffers, work_mem)"
+    echo "3.12 Seed data awal (Prisma db seed)"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -321,6 +341,10 @@ EOF
         ;;
       11|3.11)
         db_tune_production
+        pause
+        ;;
+      12|3.12)
+        db_seed_initial
         pause
         ;;
       0)
