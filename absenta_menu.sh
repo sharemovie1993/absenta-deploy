@@ -514,11 +514,26 @@ print_available_interfaces() {
 }
 
 restart_network_services() {
-  echo "Restart layanan jaringan (jika ada)..."
-  if command -v systemctl >/dev/null 2>&1; then
-    systemctl restart systemd-networkd 2>/dev/null || true
-    systemctl restart NetworkManager 2>/dev/null || true
-    systemctl restart networking 2>/dev/null || true
+  echo "=== Restart Layanan Jaringan ==="
+  if ! command -v systemctl >/dev/null 2>&1; then
+    echo "systemctl tidak ditemukan. Silakan restart layanan jaringan manual sesuai distro."
+    return
+  fi
+  restarted_any=0
+  for svc in systemd-networkd NetworkManager networking; do
+    if systemctl list-unit-files | grep -q "^$svc\.service"; then
+      echo "- Restart $svc ..."
+      if systemctl restart "$svc"; then
+        echo "  $svc: OK"
+        restarted_any=1
+      else
+        echo "  $svc: GAGAL (cek systemctl status $svc)"
+      fi
+    fi
+  done
+  if [ "$restarted_any" -eq 0 ]; then
+    echo "Tidak menemukan layanan jaringan standar (systemd-networkd/NetworkManager/networking)."
+    echo "Silakan cek layanan jaringan spesifik di server ini."
   fi
 }
 
