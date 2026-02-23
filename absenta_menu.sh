@@ -1150,6 +1150,84 @@ menu_pm2() {
   done
 }
 
+rebuild_backend_app() {
+  APP_DIR="/var/www/absenta/backend"
+  if [ ! -d "$APP_DIR" ]; then
+    echo "Direktori $APP_DIR tidak ditemukan."
+    return
+  fi
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "npm tidak ditemukan. Pastikan Node.js dan npm sudah terpasang."
+    return
+  fi
+  cd "$APP_DIR" || return
+  echo "Menjalankan npm run build untuk backend di $APP_DIR ..."
+  npm run build || echo "npm run build backend gagal. Cek log di atas."
+}
+
+rebuild_frontend_app() {
+  APP_DIR="/var/www/absenta/frontend"
+  if [ ! -d "$APP_DIR" ]; then
+    echo "Direktori $APP_DIR tidak ditemukan."
+    return
+  fi
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "npm tidak ditemukan. Pastikan Node.js dan npm sudah terpasang."
+    return
+  fi
+  cd "$APP_DIR" || return
+  echo "Menjalankan npm run build untuk frontend di $APP_DIR ..."
+  npm run build || echo "npm run build frontend gagal. Cek log di atas."
+}
+
+reboot_system_menu() {
+  echo "PERINGATAN: Sistem akan direboot."
+  read -p "Lanjut reboot sekarang? (y/n, default n): " CONFIRM
+  CONFIRM=${CONFIRM:-n}
+  case "$CONFIRM" in
+    y|Y)
+      echo "Menjalankan reboot..."
+      reboot
+      ;;
+    *)
+      echo "Batal reboot."
+      ;;
+  esac
+}
+
+menu_maintenance() {
+  while true; do
+    clear
+    echo "=== Maintenance & Rebuild ==="
+    echo "1. Rebuild Backend (npm run build)"
+    echo "2. Rebuild Frontend (npm run build)"
+    echo "3. Restart System (reboot)"
+    echo "0. Kembali"
+    read -p "Pilih: " choice
+    case "$choice" in
+      1)
+        rebuild_backend_app
+        pause
+        ;;
+      2)
+        rebuild_frontend_app
+        pause
+        ;;
+      3)
+        reboot_system_menu
+        pause
+        ;;
+      0)
+        break
+        ;;
+      *)
+        echo "Pilihan tidak dikenal"
+        pause
+        ;;
+    esac
+  done
+}
+
 menu_packages() {
   while true; do
     clear
@@ -1384,6 +1462,7 @@ while true; do
   echo "3. Konfigurasi Environment"
   echo "4. Keamanan Server (Hardening)"
   echo "5. Konfigurasi IP Address"
+  echo "6. Maintenance & Rebuild"
   echo "0. Keluar"
   read -p "Pilih menu: " main_choice
   case "$main_choice" in
@@ -1401,6 +1480,9 @@ while true; do
       ;;
     5)
       menu_ip_config
+      ;;
+    6)
+      menu_maintenance
       ;;
     0)
       echo "Keluar."
