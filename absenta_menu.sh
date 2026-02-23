@@ -315,6 +315,121 @@ menu_security() {
   done
 }
 
+diagnose_app_server() {
+  echo "=== Report App Server ==="
+  echo ""
+  echo "--- Informasi sistem dasar ---"
+  hostname
+  echo ""
+  echo "Uptime:"
+  uptime || true
+  echo ""
+  echo "--- PM2 status ---"
+  if command -v pm2 >/dev/null 2>&1; then
+    pm2 list || true
+  else
+    echo "pm2 tidak ditemukan."
+  fi
+  echo ""
+  echo "--- Service Node.js yang listen di port umum (3000/8080) ---"
+  ss -plnt 2>/dev/null | grep -E '(:3000|:8080)' || echo "Tidak ada proses yang listen di 3000/8080 atau ss tidak tersedia."
+  echo ""
+  echo "--- Cek health backend via localhost (jika ada) ---"
+  if command -v curl >/dev/null 2>&1; then
+    echo "Mencoba curl http://127.0.0.1:3000/health ..."
+    curl -sS -o /tmp/absenta_backend_health.txt -w "\nHTTP %{http_code}\n" http://127.0.0.1:3000/health || echo "Gagal curl backend health."
+    echo "Response (maks 40 baris):"
+    sed -n '1,40p' /tmp/absenta_backend_health.txt 2>/dev/null || true
+    rm -f /tmp/absenta_backend_health.txt || true
+  else
+    echo "curl tidak ditemukan."
+  fi
+  echo ""
+  echo "--- Cek environment backend (hanya key penting jika ada) ---"
+  BACKEND_ENV="$SCRIPT_DIR/backend/.env"
+  if [ -f "$BACKEND_ENV" ]; then
+    grep -E '^(DATABASE_URL|REDIS_URL|APP_URL|FRONTEND_URL|BACKEND_URL|API_BASE_URL)=' "$BACKEND_ENV" || echo "Key penting tidak ditemukan di .env."
+  else
+    echo "File backend/.env tidak ditemukan relatif terhadap $SCRIPT_DIR."
+  fi
+}
+
+diagnose_nginx() {
+  echo "=== Diagnosa Nginx & Domain ==="
+  if ! command -v nginx >/dev/null 2>&1; then
+    echo "nginx tidak terpasang di server ini."
+    return
+  fi
+  echo "--- nginx -t ---"
+  nginx -t || true
+  echo ""
+  echo "--- systemctl status nginx (20 baris pertama) ---"
+  systemctl status nginx --no-pager -l | head -n 20 || true
+  echo ""
+  if command -v curl >/dev/null 2>&1; then
+    read -p "Masukkan domain frontend untuk dicek (contoh www.absenta.id): " FRONT_DOMAIN
+    if [ -n "$FRONT_DOMAIN" ]; then
+      echo ""
+      echo "--- HTTP header untuk http://$FRONT_DOMAIN ---"
+      curl -I --max-time 10 "http://$FRONT_DOMAIN" || echo "Gagal curl http://$FRONT_DOMAIN"
+      echo ""
+      echo "--- HTTP header untuk https://$FRONT_DOMAIN (jika HTTPS) ---"
+      curl -I -k --max-time 10 "https://$FRONT_DOMAIN" || echo "Gagal curl https://$FRONT_DOMAIN"
+    else
+      echo "Domain kosong, lewati cek curl."
+    fi
+  else
+    echo "curl tidak ditemukan."
+  fi
+}
+
+diagnose_redis() {
+  echo "=== Diagnosa Redis ==="
+  if ! command -v redis-cli >/dev/null 2>&1; then
+    echo "redis-cli tidak ditemukan. Pastikan Redis terpasang di server ini."
+    return
+  fi
+  read -p "Host Redis (default 127.0.0.1): " REDIS_HOST
+  REDIS_HOST=${REDIS_HOST:-127.0.0.1}
+  read -p "Port Redis (default 6379): " REDIS_PORT
+  REDIS_PORT=${REDIS_PORT:-6379}
+  echo ""
+  echo "--- redis-cli PING ---"
+  redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" PING || echo "PING ke Redis gagal."
+  echo ""
+  echo "--- redis-cli INFO server (ringkas) ---"
+  redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" INFO server | sed -n '1,40p' || echo "Gagal ambil INFO server."
+  echo ""
+  echo "--- redis-cli INFO stats (ringkas) ---"
+  redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" INFO stats | sed -n '1,40p' || echo "Gagal ambil INFO stats."
+}
+
+diagnose_db() {
+  echo "=== Diagnosa Koneksi Database (TCP) ==="
+  read -p "Host DB (contoh 10.50.0.3 atau 127.0.0.1): " DB_HOST
+  read -p "Port DB (default 5432): " DB_PORT
+  DB_PORT=${DB_PORT:-5432}
+  echo ""
+  echo "--- Cek koneksi TCP ke $DB_HOST:$DB_PORT ---"
+  if command -v nc >/dev/null 2>&1; then
+    nc -zv "$DB_HOST" "$DB_PORT" || echo "Koneksi TCP ke $DB_HOST:$DB_PORT gagal."
+  elif command -v telnet >/dev/null 2>&1; then
+    echo "telnet $DB_HOST $DB_PORT (tekan Ctrl+] lalu 'quit' untuk keluar)"
+    telnet "$DB_HOST" "$DB_PORT" || echo "Koneksi telnet gagal."
+  else
+    echo "nc/telnet tidak tersedia. Install salah satunya untuk tes TCP."
+  fi
+}
+
+diagnose_pm2_simple() {
+  echo "=== Diagnosa PM2 ==="
+  if command -v pm2 >/dev/null 2>&1; then
+    pm2 list || true
+  else
+    echo "pm2 tidak ditemukan di PATH."
+  fi
+}
+
 menu_diagnostics() {
   while true; do
     clear
@@ -613,317 +728,58 @@ menu_packages() {
   done
 }
 
-select_server_profile() {
-  echo "===== Deteksi Lingkungan Server ====="
-  if command -v nginx >/dev/null 2>&1; then
-    echo "- nginx terdeteksi di server ini."
-  else
-    echo "- nginx TIDAK terdeteksi."
-  fi
-
-  if command -v pm2 >/dev/null 2>&1; then
-    echo "- pm2 terdeteksi di server ini."
-  else
-    echo "- pm2 TIDAK terdeteksi."
-  fi
-
-  if command -v redis-cli >/dev/null 2>&1; then
-    echo "- redis-cli terdeteksi (kemungkinan server Redis atau client Redis)."
-  else
-    echo "- redis-cli TIDAK terdeteksi."
-  fi
-
-  if command -v psql >/dev/null 2>&1; then
-    echo "- psql terdeteksi (kemungkinan server PostgreSQL atau client PostgreSQL)."
-  else
-    echo "- psql TIDAK terdeteksi."
-  fi
-
-  if command -v wg >/dev/null 2>&1 || [ -d /etc/wireguard ]; then
-    echo "- WireGuard terdeteksi."
-  else
-    echo "- WireGuard TIDAK terdeteksi."
-  fi
-
-  echo ""
-  echo "===== Pilih Profil Lingkungan Server Ini ====="
-  echo "1. App Server (Nginx + Backend + Frontend di server ini)"
-  echo "2. Backend / Frontend saja (tanpa Nginx reverse proxy utama)"
-  echo "3. Database Server (PostgreSQL)"
-  echo "4. Redis Server"
-  echo "5. WireGuard / VPN Gateway"
-  echo "6. Mode Umum (tampilkan semua menu)"
-  read -p "Pilih profil server (default 6): " PROFILE_CHOICE
-  PROFILE_CHOICE=${PROFILE_CHOICE:-6}
-
-  case "$PROFILE_CHOICE" in
-    1) SERVER_PROFILE="app" ;;
-    2) SERVER_PROFILE="backend_frontend" ;;
-    3) SERVER_PROFILE="db" ;;
-    4) SERVER_PROFILE="redis" ;;
-    5) SERVER_PROFILE="vpn" ;;
-    *) SERVER_PROFILE="general" ;;
-  esac
-}
-
-main_menu_app() {
+menu_deploy() {
   while true; do
     clear
-    echo "===== ABSENTA MENU – App Server ====="
-    echo "1. Deploy/Update App Server (backend + frontend)"
-    echo "2. Nginx Reverse Proxy"
-    echo "3. WireGuard VPN"
-    echo "4. Mail Server (Mailcow + GUI)"
-    echo "5. Diagnostik & Report"
-    echo "6. PM2 & Monitoring Proses"
-    echo "7. Keamanan Server (Hardening)"
-    echo "8. Manajemen Paket Sistem (hapus nginx/redis/postgresql)"
-    echo "0. Keluar"
-    read -p "Pilih menu: " choice
+    echo "=== Deploy ==="
+    echo "1. Backend + Frontend"
+    echo "2. Backend Only"
+    echo "3. Frontend Only"
+    echo "4. Worker"
+    echo "5. Nginx Reverse Proxy"
+    echo "6. WireGuard VPN"
+    echo "7. Redis"
+    echo "8. PostgreSQL"
+    echo "9. Mail Server"
+    echo "10. Manajemen Paket"
+    echo "0. Kembali"
+    read -p "Pilih: " choice
     case "$choice" in
       1)
         menu_app_server
         ;;
       2)
-        menu_nginx
+        bash "$SCRIPT_DIR/deploy_backend_server.sh"
+        pause
         ;;
       3)
-        menu_wireguard
+        bash "$SCRIPT_DIR/deploy_frontend_server.sh"
+        pause
         ;;
       4)
+        menu_worker_server
+        ;;
+      5)
+        menu_nginx
+        ;;
+      6)
+        menu_wireguard
+        ;;
+      7)
+        menu_redis_server
+        ;;
+      8)
+        menu_db_server
+        ;;
+      9)
         bash "$SCRIPT_DIR/deploy_mail_server.sh"
         pause
         ;;
-      5)
-        menu_diagnostics
-        ;;
-      6)
-        menu_pm2
-        ;;
-      7)
-        menu_security
-        ;;
-      8)
-        menu_packages
-        ;;
-      0)
-        echo "Keluar."
-        exit 0
-        ;;
-      *)
-        echo "Pilihan tidak dikenal"
-        pause
-        ;;
-    esac
-  done
-}
-
-main_menu_backend_frontend() {
-  while true; do
-    clear
-    echo "===== ABSENTA MENU – Backend / Frontend Server ====="
-    echo "1. Deploy Backend / Frontend terpisah"
-    echo "2. Worker Server"
-    echo "3. WireGuard VPN"
-    echo "4. Diagnostik & Report"
-    echo "5. PM2 & Monitoring Proses"
-    echo "6. Keamanan Server (Hardening)"
-    echo "0. Keluar"
-    read -p "Pilih menu: " choice
-    case "$choice" in
-      1)
-        menu_backend_frontend
-        ;;
-      2)
-        menu_worker_server
-        ;;
-      3)
-        menu_wireguard
-        ;;
-      4)
-        menu_diagnostics
-        ;;
-      5)
-        menu_pm2
-        ;;
-      6)
-        menu_security
-        ;;
-      0)
-        echo "Keluar."
-        exit 0
-        ;;
-      *)
-        echo "Pilihan tidak dikenal"
-        pause
-        ;;
-    esac
-  done
-}
-
-main_menu_db() {
-  while true; do
-    clear
-    echo "===== ABSENTA MENU – Database Server ====="
-    echo "1. Deploy PostgreSQL server"
-    echo "2. WireGuard VPN"
-    echo "3. Diagnostik & Report (fokus DB/Redis/Network)"
-    echo "4. Keamanan Server (Hardening)"
-    echo "5. Manajemen Paket Sistem (hapus nginx/redis/postgresql)"
-    echo "0. Keluar"
-    read -p "Pilih menu: " choice
-    case "$choice" in
-      1)
-        menu_db_server
-        ;;
-      2)
-        menu_wireguard
-        ;;
-      3)
-        menu_diagnostics
-        ;;
-      4)
-        menu_security
-        ;;
-      5)
-        menu_packages
-        ;;
-      0)
-        echo "Keluar."
-        exit 0
-        ;;
-      *)
-        echo "Pilihan tidak dikenal"
-        pause
-        ;;
-    esac
-  done
-}
-
-main_menu_redis() {
-  while true; do
-    clear
-    echo "===== ABSENTA MENU – Redis Server ====="
-    echo "1. Deploy Redis server"
-    echo "2. WireGuard VPN"
-    echo "3. Diagnostik & Report (Redis/Network)"
-    echo "4. Keamanan Server (Hardening)"
-    echo "5. Manajemen Paket Sistem (hapus nginx/redis/postgresql)"
-    echo "0. Keluar"
-    read -p "Pilih menu: " choice
-    case "$choice" in
-      1)
-        menu_redis_server
-        ;;
-      2)
-        menu_wireguard
-        ;;
-      3)
-        menu_diagnostics
-        ;;
-      4)
-        menu_security
-        ;;
-      5)
-        menu_packages
-        ;;
-      0)
-        echo "Keluar."
-        exit 0
-        ;;
-      *)
-        echo "Pilihan tidak dikenal"
-        pause
-        ;;
-    esac
-  done
-}
-
-main_menu_vpn() {
-  while true; do
-    clear
-    echo "===== ABSENTA MENU – WireGuard / VPN Gateway ====="
-    echo "1. WireGuard VPN (setup, tambah/hapus client, debug)"
-    echo "2. Diagnostik & Report (network, ping, dll)"
-    echo "3. Keamanan Server (Hardening)"
-    echo "0. Keluar"
-    read -p "Pilih menu: " choice
-    case "$choice" in
-      1)
-        menu_wireguard
-        ;;
-      2)
-        menu_diagnostics
-        ;;
-      3)
-        menu_security
-        ;;
-      0)
-        echo "Keluar."
-        exit 0
-        ;;
-      *)
-        echo "Pilihan tidak dikenal"
-        pause
-        ;;
-    esac
-  done
-}
-
-main_menu_general() {
-  while true; do
-    clear
-    echo "===== ABSENTA DEPLOY MENU – Mode Umum ====="
-    echo "1. App Server (backend + frontend)"
-    echo "2. Backend / Frontend terpisah"
-    echo "3. Database Server (PostgreSQL)"
-    echo "4. Redis Server"
-    echo "5. Worker Server"
-    echo "6. Nginx Reverse Proxy"
-    echo "7. WireGuard VPN"
-    echo "8. Keamanan Server (Hardening)"
-    echo "9. Diagnostik & Report"
-    echo "10. PM2 & Monitoring Proses"
-    echo "11. Manajemen Paket Sistem (hapus nginx/redis/postgresql)"
-    echo "0. Keluar"
-    read -p "Pilih menu: " main_choice
-    case "$main_choice" in
-      1)
-        menu_app_server
-        ;;
-      2)
-        menu_backend_frontend
-        ;;
-      3)
-        menu_db_server
-        ;;
-      4)
-        menu_redis_server
-        ;;
-      5)
-        menu_worker_server
-        ;;
-      6)
-        menu_nginx
-        ;;
-      7)
-        menu_wireguard
-        ;;
-      8)
-        menu_security
-        ;;
-      9)
-        menu_diagnostics
-        ;;
       10)
-        menu_pm2
-        ;;
-      11)
         menu_packages
         ;;
       0)
-        echo "Keluar."
-        exit 0
+        break
         ;;
       *)
         echo "Pilihan tidak dikenal"
@@ -933,25 +789,78 @@ main_menu_general() {
   done
 }
 
-select_server_profile
+menu_diagnosa() {
+  while true; do
+    clear
+    echo "=== Diagnosa ==="
+    echo "1. Diagnos & Report PM2 Backend + Frontend"
+    echo "2. Diagnosa Database"
+    echo "3. Diagnosa Nginx"
+    echo "4. Diagnosa Redis"
+    echo "5. Diagnosa PM2"
+    echo "0. Kembali"
+    read -p "Pilih: " choice
+    case "$choice" in
+      1)
+        diagnose_app_server
+        pause
+        ;;
+      2)
+        diagnose_db
+        pause
+        ;;
+      3)
+        diagnose_nginx
+        pause
+        ;;
+      4)
+        diagnose_redis
+        pause
+        ;;
+      5)
+        diagnose_pm2_simple
+        pause
+        ;;
+      0)
+        break
+        ;;
+      *)
+        echo "Pilihan tidak dikenal"
+        pause
+        ;;
+    esac
+  done
+}
 
-case "$SERVER_PROFILE" in
-  app)
-    main_menu_app
-    ;;
-  backend_frontend)
-    main_menu_backend_frontend
-    ;;
-  db)
-    main_menu_db
-    ;;
-  redis)
-    main_menu_redis
-    ;;
-  vpn)
-    main_menu_vpn
-    ;;
-  *)
-    main_menu_general
-    ;;
-esac
+while true; do
+  clear
+  echo "===== ABSENTA CONTROL MENU ====="
+  echo "1. Deploy"
+  echo "2. Diagnosa"
+  echo "3. PM2 & Monitoring Proses"
+  echo "4. Keamanan Server (Hardening)"
+  echo "0. Keluar"
+  read -p "Pilih menu: " main_choice
+  case "$main_choice" in
+    1)
+      menu_deploy
+      ;;
+    2)
+      menu_diagnosa
+      ;;
+    3)
+      menu_pm2
+      ;;
+    4)
+      menu_security
+      ;;
+    0)
+      echo "Keluar."
+      exit 0
+      ;;
+    *)
+      echo "Pilihan tidak dikenal"
+      pause
+      ;;
+  esac
+done
