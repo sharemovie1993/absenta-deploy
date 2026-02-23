@@ -165,88 +165,55 @@ menu_nginx() {
   done
 }
 
-menu_wireguard() {
+menu_wireguard_server_side() {
   while true; do
     clear
-    echo "=== 7. WireGuard VPN ==="
-    echo "7.1 Setup WireGuard client di server aplikasi/DB/Redis"
-    echo "7.2 Tambah client di server WireGuard"
-    echo "7.3 Hapus client di server WireGuard"
-    echo "7.4 Cek status WireGuard (wg show)"
-    echo "7.5 Restart layanan WireGuard (wg-quick@IFACE)"
-    echo "7.6 Uji konektivitas ping antar IP WireGuard"
-    echo "7.7 Lihat konfigurasi WireGuard (wg0.conf)"
-    echo "7.8 Jalankan tcpdump ICMP di interface WireGuard"
-    echo "7.9 Tampilkan key WireGuard (PublicKey dari PrivateKey interface)"
+    echo "=== WireGuard Server Side ==="
+    echo "1. Tambah Client"
+    echo "2. Hapus Client"
+    echo "3. Setup WireGuard Client di server aplikasi/DB/Redis"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
-      1|7.1)
-        bash "$SCRIPT_DIR/setup_wireguard_client.sh"
-        pause
-        ;;
-      2|7.2)
+      1)
         bash "$SCRIPT_DIR/add_wireguard_client.sh"
         pause
         ;;
-      3|7.3)
+      2)
         bash "$SCRIPT_DIR/delete_wireguard_client.sh"
         pause
         ;;
-      4|7.4)
-        read -p "Nama interface WireGuard (default wg0): " WG_IFACE
-        WG_IFACE=${WG_IFACE:-wg0}
-        echo "Status WireGuard untuk $WG_IFACE:"
-        wg show "$WG_IFACE" || echo "Interface $WG_IFACE tidak aktif atau wg belum terpasang."
+      3)
+        bash "$SCRIPT_DIR/setup_wireguard_client.sh"
         pause
         ;;
-      5|7.5)
-        read -p "Nama interface WireGuard (default wg0): " WG_IFACE
-        WG_IFACE=${WG_IFACE:-wg0}
-        echo "Restart layanan wg-quick@$WG_IFACE..."
-        systemctl restart "wg-quick@$WG_IFACE" || echo "Gagal restart wg-quick@$WG_IFACE"
-        systemctl status "wg-quick@$WG_IFACE" --no-pager -l | head -n 20 || true
+      0)
+        break
+        ;;
+      *)
+        echo "Pilihan tidak dikenal"
         pause
         ;;
-      6|7.6)
-        read -p "IP sumber (kosongkan untuk default IP server ini): " SRC_IP
-        read -p "IP tujuan WireGuard yang ingin di-ping (contoh 10.50.0.1): " TARGET_IP
-        if [ -z "$TARGET_IP" ]; then
-          echo "IP tujuan wajib diisi."
-          pause
-        else
-          if [ -n "$SRC_IP" ]; then
-            echo "Ping dari server ini ke $TARGET_IP (source IP tidak dapat diatur langsung via ping standar)"
-          fi
-          ping -c 4 "$TARGET_IP" || echo "Ping ke $TARGET_IP gagal."
-          pause
-        fi
-        ;;
-      7|7.7)
-        read -p "Nama interface WireGuard (default wg0): " WG_IFACE
-        WG_IFACE=${WG_IFACE:-wg0}
-        WG_CONF="/etc/wireguard/$WG_IFACE.conf"
-        if [ -f "$WG_CONF" ]; then
-          echo "Isi konfigurasi $WG_CONF:"
-          sed -n '1,200p' "$WG_CONF"
-        else
-          echo "File konfigurasi $WG_CONF tidak ditemukan."
-        fi
+    esac
+  done
+}
+
+menu_wireguard() {
+  while true; do
+    clear
+    echo "=== WireGuard VPN ==="
+    echo "1. Deploy WireGuard Server"
+    echo "2. Show Public Key"
+    echo "3. Lihat Konfigurasi"
+    echo "4. Server Side (Tambah/Hapus/Setup Client)"
+    echo "0. Kembali"
+    read -p "Pilih: " choice
+    case "$choice" in
+      1)
+        bash "$SCRIPT_DIR/deploy_wireguard_server.sh"
         pause
         ;;
-      8|7.8)
-        read -p "Nama interface WireGuard (default wg0): " WG_IFACE
-        WG_IFACE=${WG_IFACE:-wg0}
-        if ! command -v tcpdump >/dev/null 2>&1; then
-          echo "tcpdump belum terpasang. Install dengan: apt install tcpdump"
-          pause
-        else
-          echo "Menjalankan tcpdump untuk ICMP di interface $WG_IFACE. Tekan Ctrl+C untuk berhenti."
-          tcpdump -n -i "$WG_IFACE" icmp
-          pause
-        fi
-        ;;
-      9|7.9)
+      2)
         read -p "Nama interface WireGuard (default wg0): " WG_IFACE
         WG_IFACE=${WG_IFACE:-wg0}
         WG_CONF="/etc/wireguard/$WG_IFACE.conf"
@@ -280,6 +247,21 @@ menu_wireguard() {
           fi
           pause
         fi
+        ;;
+      3)
+        read -p "Nama interface WireGuard (default wg0): " WG_IFACE
+        WG_IFACE=${WG_IFACE:-wg0}
+        WG_CONF="/etc/wireguard/$WG_IFACE.conf"
+        if [ -f "$WG_CONF" ]; then
+          echo "Isi konfigurasi $WG_CONF:"
+          sed -n '1,200p' "$WG_CONF"
+        else
+          echo "File konfigurasi $WG_CONF tidak ditemukan."
+        fi
+        pause
+        ;;
+      4)
+        menu_wireguard_server_side
         ;;
       0)
         break
@@ -428,6 +410,34 @@ diagnose_pm2_simple() {
   else
     echo "pm2 tidak ditemukan di PATH."
   fi
+}
+
+diagnose_wireguard_ping() {
+  read -p "IP tujuan WireGuard yang ingin di-ping (contoh 10.50.0.1): " TARGET_IP
+  if [ -z "$TARGET_IP" ]; then
+    echo "IP tujuan wajib diisi."
+  else
+    ping -c 4 "$TARGET_IP" || echo "Ping ke $TARGET_IP gagal."
+  fi
+}
+
+diagnose_wireguard_tcpdump() {
+  read -p "Nama interface WireGuard (default wg0): " WG_IFACE
+  WG_IFACE=${WG_IFACE:-wg0}
+  if ! command -v tcpdump >/dev/null 2>&1; then
+    echo "tcpdump belum terpasang. Install dengan: apt install tcpdump"
+  else
+    echo "Menjalankan tcpdump untuk ICMP di interface $WG_IFACE. Tekan Ctrl+C untuk berhenti."
+    tcpdump -n -i "$WG_IFACE" icmp
+  fi
+}
+
+diagnose_wireguard_restart() {
+  read -p "Nama interface WireGuard (default wg0): " WG_IFACE
+  WG_IFACE=${WG_IFACE:-wg0}
+  echo "Restart layanan wg-quick@$WG_IFACE..."
+  systemctl restart "wg-quick@$WG_IFACE" || echo "Gagal restart wg-quick@$WG_IFACE"
+  systemctl status "wg-quick@$WG_IFACE" --no-pager -l | head -n 20 || true
 }
 
 menu_diagnostics() {
@@ -794,10 +804,11 @@ menu_diagnosa() {
     clear
     echo "=== Diagnosa ==="
     echo "1. Diagnos & Report PM2 Backend + Frontend"
-    echo "2. Diagnosa Database"
-    echo "3. Diagnosa Nginx"
-    echo "4. Diagnosa Redis"
-    echo "5. Diagnosa PM2"
+    echo "2. Diagnosa PM2 & Monitoring process"
+    echo "3. Diagnose WireGuard"
+    echo "4. Diagnosa Database"
+    echo "5. Diagnosa Nginx"
+    echo "6. Diagnosa Redis"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -806,19 +817,52 @@ menu_diagnosa() {
         pause
         ;;
       2)
-        diagnose_db
+        diagnose_pm2_simple
         pause
         ;;
       3)
-        diagnose_nginx
+        while true; do
+          clear
+          echo "=== Diagnose WireGuard ==="
+          echo "1. Ping"
+          echo "2. Run TCP-Dump"
+          echo "3. Restart Layanan"
+          echo "0. Kembali"
+          read -p "Pilih: " wg_choice
+          case "$wg_choice" in
+            1)
+              diagnose_wireguard_ping
+              pause
+              ;;
+            2)
+              diagnose_wireguard_tcpdump
+              pause
+              ;;
+            3)
+              diagnose_wireguard_restart
+              pause
+              ;;
+            0)
+              break
+              ;;
+            *)
+              echo "Pilihan tidak dikenal"
+              pause
+              ;;
+          esac
+        done
         pause
         ;;
       4)
-        diagnose_redis
+        diagnose_db
         pause
         ;;
       5)
-        diagnose_pm2_simple
+        diagnose_nginx
+        pause
+        ;;
+      6)
+        diagnose_redis
         pause
         ;;
       0)
