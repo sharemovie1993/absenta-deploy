@@ -817,8 +817,7 @@ menu_diagnosa() {
         pause
         ;;
       2)
-        diagnose_pm2_simple
-        pause
+        menu_pm2
         ;;
       3)
         while true; do
@@ -882,7 +881,6 @@ while true; do
   echo "1. Deploy"
   echo "2. Diagnosa"
   echo "3. Keamanan Server (Hardening)"
-  echo "4. PM2 & Monitoring Proses"
   echo "0. Keluar"
   read -p "Pilih menu: " main_choice
   case "$main_choice" in
@@ -894,9 +892,6 @@ while true; do
       ;;
     3)
       menu_security
-      ;;
-    4)
-      menu_pm2
       ;;
     0)
       echo "Keluar."
