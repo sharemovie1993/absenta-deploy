@@ -608,6 +608,31 @@ EOF
   restart_network_services
 }
 
+disable_dhcp_config() {
+  ensure_netplan_available || return
+  echo "=== Disable DHCP4 di semua file netplan ==="
+  echo "Tindakan ini akan mengubah 'dhcp4: true' menjadi 'dhcp4: false' di:"
+  echo "  /etc/netplan/*.yaml"
+  read -p "Lanjut nonaktifkan DHCP4 di semua file netplan? (y/n, default n): " DISABLE_ALL
+  DISABLE_ALL=${DISABLE_ALL:-n}
+  case "$DISABLE_ALL" in
+    y|Y)
+      for file in /etc/netplan/*.yaml; do
+        if [ -f "$file" ]; then
+          TS="$(date +%Y%m%d%H%M%S)"
+          cp "$file" "${file}.bak_$TS" || true
+          sed -i 's/dhcp4:[ ]*true/dhcp4: false/g' "$file" || echo "Gagal mengubah $file"
+        fi
+      done
+      netplan apply || echo "Gagal menjalankan netplan apply. Silakan cek konfigurasi."
+      restart_network_services
+      ;;
+    *)
+      echo "Batal menonaktifkan DHCP4."
+      ;;
+  esac
+}
+
 show_current_ip() {
   echo "=== IP Address Saat Ini ==="
   if command -v ip >/dev/null 2>&1; then
@@ -629,7 +654,8 @@ menu_ip_config() {
     echo "1. Set IP Dynamic (DHCP)"
     echo "2. Set IP Static"
     echo "3. Cek IP Saat Ini"
-    echo "4. Restart Layanan Jaringan"
+    echo "4. Disable DHCP (netplan)"
+    echo "5. Restart Layanan Jaringan"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -646,6 +672,10 @@ menu_ip_config() {
         pause
         ;;
       4)
+        disable_dhcp_config
+        pause
+        ;;
+      5)
         restart_network_services
         pause
         ;;
