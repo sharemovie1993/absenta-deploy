@@ -18,6 +18,8 @@ menu_app_server() {
     echo "=== 1. App Server (Backend + Frontend) ==="
     echo "1.1 Deploy app server baru"
     echo "1.2 Update app server"
+    echo "1.3 Rebuild Backend (npm run build)"
+    echo "1.4 Rebuild Frontend (npm run build)"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -27,6 +29,14 @@ menu_app_server() {
         ;;
       2|1.2)
         bash "$SCRIPT_DIR/update_app_server.sh"
+        pause
+        ;;
+      3|1.3)
+        rebuild_backend_app
+        pause
+        ;;
+      4|1.4)
+        rebuild_frontend_app
         pause
         ;;
       0)
