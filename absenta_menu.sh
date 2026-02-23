@@ -177,6 +177,7 @@ menu_wireguard() {
     echo "7.6 Uji konektivitas ping antar IP WireGuard"
     echo "7.7 Lihat konfigurasi WireGuard (wg0.conf)"
     echo "7.8 Jalankan tcpdump ICMP di interface WireGuard"
+    echo "7.9 Tampilkan key WireGuard (PublicKey dari PrivateKey interface)"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -242,6 +243,41 @@ menu_wireguard() {
         else
           echo "Menjalankan tcpdump untuk ICMP di interface $WG_IFACE. Tekan Ctrl+C untuk berhenti."
           tcpdump -n -i "$WG_IFACE" icmp
+          pause
+        fi
+        ;;
+      9|7.9)
+        read -p "Nama interface WireGuard (default wg0): " WG_IFACE
+        WG_IFACE=${WG_IFACE:-wg0}
+        WG_CONF="/etc/wireguard/$WG_IFACE.conf"
+        if [ ! -f "$WG_CONF" ]; then
+          echo "File konfigurasi $WG_CONF tidak ditemukan."
+          pause
+        else
+          PRIVATE_LINE=$(grep -m1 '^PrivateKey' "$WG_CONF" || true)
+          if [ -z "$PRIVATE_LINE" ]; then
+            echo "Tidak menemukan PrivateKey di $WG_CONF."
+          else
+            PRIVATE_KEY=$(printf "%s" "$PRIVATE_LINE" | awk -F'= ' '{print $2}')
+            if [ -z "$PRIVATE_KEY" ]; then
+              echo "Gagal membaca nilai PrivateKey dari $WG_CONF."
+            else
+              PUB_FROM_CONF=$(printf "%s" "$PRIVATE_KEY" | wg pubkey 2>/dev/null || true)
+              if [ -z "$PUB_FROM_CONF" ]; then
+                echo "Gagal menghitung PublicKey dari PrivateKey."
+              else
+                echo "PublicKey hasil dari PrivateKey interface di $WG_CONF:"
+                echo "$PUB_FROM_CONF"
+              fi
+            fi
+          fi
+          echo ""
+          echo "PublicKey yang sedang aktif menurut wg show:"
+          if command -v wg >/dev/null 2>&1; then
+            wg show "$WG_IFACE" | sed -n '1,80p' || echo "Gagal menjalankan wg show."
+          else
+            echo "Perintah wg tidak ditemukan."
+          fi
           pause
         fi
         ;;
