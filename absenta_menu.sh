@@ -478,6 +478,7 @@ menu_wireguard() {
     echo "2. Show Public Key"
     echo "3. Lihat Konfigurasi"
     echo "4. Server Side (Tambah/Hapus/Setup Client)"
+    echo "5. Status WireGuard (service + peer)"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -534,6 +535,25 @@ menu_wireguard() {
         ;;
       4)
         menu_wireguard_server_side
+        ;;
+      5)
+        read -p "Nama interface WireGuard (default wg0): " WG_IFACE
+        WG_IFACE=${WG_IFACE:-wg0}
+        echo "=== Status WireGuard untuk $WG_IFACE ==="
+        if command -v systemctl >/dev/null 2>&1; then
+          echo "--- systemctl status wg-quick@$WG_IFACE (20 baris pertama) ---"
+          systemctl status "wg-quick@$WG_IFACE" --no-pager -l | head -n 20 || echo "Gagal membaca status service wg-quick@$WG_IFACE."
+          echo ""
+        else
+          echo "systemctl tidak ditemukan, lewati status service."
+        fi
+        if command -v wg >/dev/null 2>&1; then
+          echo "--- wg show $WG_IFACE ---"
+          wg show "$WG_IFACE" 2>/dev/null || echo "wg show gagal atau interface $WG_IFACE tidak aktif."
+        else
+          echo "Perintah wg tidak ditemukan. Pastikan wireguard-tools terpasang."
+        fi
+        pause
         ;;
       0)
         break
