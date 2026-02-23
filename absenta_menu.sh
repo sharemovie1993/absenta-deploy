@@ -470,12 +470,53 @@ menu_env_config() {
   done
 }
 
-configure_ip_dhcp() {
-  if ! command -v netplan >/dev/null 2>&1; then
-    echo "netplan tidak ditemukan. Hanya mendukung sistem dengan netplan."
-    return
+ensure_netplan_available() {
+  if command -v netplan >/dev/null 2>&1; then
+    return 0
   fi
-  read -p "Nama interface network (contoh ens3): " IFACE
+  echo "netplan tidak ditemukan di sistem."
+  if command -v apt-get >/dev/null 2>&1 || command -v apt >/dev/null 2>&1; then
+    read -p "Install paket netplan.io sekarang? (y/n, default n): " INSTALL_NETPLAN
+    INSTALL_NETPLAN=${INSTALL_NETPLAN:-n}
+    case "$INSTALL_NETPLAN" in
+      y|Y)
+        if command -v apt-get >/dev/null 2>&1; then
+          apt-get update -y && apt-get install -y netplan.io || { echo "Install netplan.io gagal."; return 1; }
+        else
+          apt update -y && apt install -y netplan.io || { echo "Install netplan.io gagal."; return 1; }
+        fi
+        ;;
+      *)
+        echo "Konfigurasi IP dibatalkan karena netplan tidak tersedia."
+        return 1
+        ;;
+    esac
+  else
+    echo "apt/apt-get tidak ditemukan. Install netplan.io secara manual."
+    return 1
+  fi
+  if ! command -v netplan >/dev/null 2>&1; then
+    echo "netplan masih belum tersedia setelah instalasi."
+    return 1
+  fi
+  return 0
+}
+
+print_available_interfaces() {
+  echo "Daftar interface network yang terdeteksi:"
+  if command -v ip >/dev/null 2>&1; then
+    ip -o link show | awk -F': ' '{print $2}' | grep -v '^lo$'
+  elif command -v ifconfig >/dev/null 2>&1; then
+    ifconfig -a | sed 's/[ \t].*//;/^\(lo\|\)$/d'
+  else
+    echo "Perintah ip/ifconfig tidak ditemukan. Tidak bisa mendeteksi interface otomatis."
+  fi
+}
+
+configure_ip_dhcp() {
+  ensure_netplan_available || return
+  print_available_interfaces
+  read -p "Nama interface network yang akan dikonfigurasi (contoh ens3): " IFACE
   if [ -z "$IFACE" ]; then
     echo "Nama interface tidak boleh kosong."
     return
@@ -498,11 +539,9 @@ EOF
 }
 
 configure_ip_static() {
-  if ! command -v netplan >/dev/null 2>&1; then
-    echo "netplan tidak ditemukan. Hanya mendukung sistem dengan netplan."
-    return
-  fi
-  read -p "Nama interface network (contoh ens3): " IFACE
+  ensure_netplan_available || return
+  print_available_interfaces
+  read -p "Nama interface network yang akan dikonfigurasi (contoh ens3): " IFACE
   if [ -z "$IFACE" ]; then
     echo "Nama interface tidak boleh kosong."
     return
