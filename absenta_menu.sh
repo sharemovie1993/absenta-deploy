@@ -513,6 +513,15 @@ print_available_interfaces() {
   fi
 }
 
+restart_network_services() {
+  echo "Restart layanan jaringan (jika ada)..."
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl restart systemd-networkd 2>/dev/null || true
+    systemctl restart NetworkManager 2>/dev/null || true
+    systemctl restart networking 2>/dev/null || true
+  fi
+}
+
 configure_ip_dhcp() {
   ensure_netplan_available || return
   print_available_interfaces
@@ -536,6 +545,7 @@ network:
 EOF
   echo "Konfigurasi tersimpan di $NETPLAN_FILE"
   netplan apply || echo "Gagal menjalankan netplan apply. Silakan cek konfigurasi."
+  restart_network_services
 }
 
 configure_ip_static() {
@@ -580,6 +590,21 @@ network:
 EOF
   echo "Konfigurasi tersimpan di $NETPLAN_FILE"
   netplan apply || echo "Gagal menjalankan netplan apply. Silakan cek konfigurasi."
+  restart_network_services
+}
+
+show_current_ip() {
+  echo "=== IP Address Saat Ini ==="
+  if command -v ip >/dev/null 2>&1; then
+    ip -4 addr show | awk '/^[0-9]+: /{iface=$2} /inet /{gsub(":", "", iface); print iface, $2}'
+    echo ""
+    echo "Default route:"
+    ip route show default || true
+  elif command -v ifconfig >/dev/null 2>&1; then
+    ifconfig
+  else
+    echo "Perintah ip/ifconfig tidak ditemukan."
+  fi
 }
 
 menu_ip_config() {
@@ -588,6 +613,7 @@ menu_ip_config() {
     echo "=== Konfigurasi IP Address ==="
     echo "1. Set IP Dynamic (DHCP)"
     echo "2. Set IP Static"
+    echo "3. Cek IP Saat Ini"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -597,6 +623,10 @@ menu_ip_config() {
         ;;
       2)
         configure_ip_static
+        pause
+        ;;
+      3)
+        show_current_ip
         pause
         ;;
       0)
