@@ -648,6 +648,10 @@ fi
 
 ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/absenta.conf
 
+if [ -L /etc/nginx/sites-enabled/absenta ] && [ ! -e /etc/nginx/sites-enabled/absenta ]; then
+  rm -f /etc/nginx/sites-enabled/absenta
+fi
+
 if [ -f /etc/nginx/sites-enabled/default ]; then
   rm -f /etc/nginx/sites-enabled/default
 fi
