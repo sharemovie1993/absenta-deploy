@@ -26,6 +26,10 @@ if [ -z "$FRONTEND_DOMAIN" ] || [ -z "$API_DOMAIN" ]; then
   exit 1
 fi
 
+DEFAULT_CERT_DOMAIN=$(echo "$FRONTEND_DOMAIN" | awk '{print $NF}' | sed 's/^\*\.//')
+read -p "Base domain sertifikat SSL (default ${DEFAULT_CERT_DOMAIN}): " CERT_DOMAIN
+CERT_DOMAIN=${CERT_DOMAIN:-$DEFAULT_CERT_DOMAIN}
+
 if [ "$NGINX_MODE" = "1" ] || [ "$NGINX_MODE" = "2" ]; then
   read -p "Port backend internal default untuk API (default ${BACKEND_PORT_DEFAULT}): " BACKEND_PORT_INPUT
   BACKEND_PORT_DEFAULT=${BACKEND_PORT_INPUT:-$BACKEND_PORT_DEFAULT}
@@ -74,7 +78,6 @@ if [ "$NGINX_MODE" = "1" ] || [ "$NGINX_MODE" = "2" ]; then
   done
 
   if [ "$NGINX_MODE" = "1" ]; then
-    # Multi Backend - Multi Frontend (cluster App Server, setiap VM punya backend+frontend)
     cat > "$NGINX_CONF" <<EOF
 upstream absenta_backend_upstream {
 ${BACKEND_UPSTREAM_SERVERS}}
@@ -86,7 +89,124 @@ server {
   listen 80;
   server_name ${API_DOMAIN};
 
-  client_max_body_size 20m;
+  return 301 https://\$host\$request_uri;
+}
+
+server {
+  listen 443 ssl http2;
+  server_name ${API_DOMAIN};
+
+  ssl_certificate /etc/letsencrypt/live/${CERT_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${CERT_DOMAIN}/privkey.pem;
+
+  location / {
+    if (\$request_method = 'OPTIONS') {
+      add_header 'Access-Control-Allow-Origin' "\$http_origin" always;
+      add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+      add_header 'Access-Control-Allow-Headers' 'authorization, content-type, x-tenant-sub, x-tenant-host, x-tenant-domain, x-tenant-id, x-skip-tenant, x-skip-403-redirect, x-requested-with, accept, origin, user-agent, x-socket-id' always;
+      add_header 'Access-Control-Allow-Credentials' 'true' always;
+      add_header 'Access-Control-Max-Age' 86400 always;
+      add_header 'Content-Type' 'text/plain; charset=utf-8';
+      add_header 'Content-Length' 0;
+      return 204;
+    }
+
+    add_header 'Access-Control-Allow-Origin' "\$http_origin" always;
+    add_header 'Access-Control-Allow-Credentials' 'true' always;
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+    add_header 'Access-Control-Allow-Headers' 'authorization, content-type, x-tenant-sub, x-tenant-host, x-tenant-domain, x-tenant-id, x-skip-tenant, x-skip-403-redirect, x-requested-with, accept, origin, user-agent, x-socket-id' always;
+
+    proxy_hide_header 'Access-Control-Allow-Origin';
+    proxy_hide_header 'Access-Control-Allow-Credentials';
+    proxy_hide_header 'Access-Control-Allow-Methods';
+    proxy_hide_header 'Access-Control-Allow-Headers';
+
+    proxy_pass http://absenta_backend_upstream;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection "upgrade";
+  }
+}
+
+server {
+  listen 80;
+  server_name ${FRONTEND_DOMAIN};
+  return 301 https://\$host\$request_uri;
+}
+
+server {
+  listen 443 ssl http2;
+  server_name ${FRONTEND_DOMAIN};
+
+  ssl_certificate /etc/letsencrypt/live/${CERT_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${CERT_DOMAIN}/privkey.pem;
+
+  location ^~ /webhooks/ {
+    proxy_pass http://absenta_backend_upstream;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+  }
+
+  location ^~ /payment/ {
+    proxy_pass http://absenta_backend_upstream;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+  }
+
+  location ^~ /invoice/public/ {
+    proxy_pass http://absenta_backend_upstream;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+  }
+
+  location /api/ {
+    if (\$request_method = 'OPTIONS') {
+      add_header 'Access-Control-Allow-Origin' "\$http_origin" always;
+      add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+      add_header 'Access-Control-Allow-Headers' 'authorization, content-type, x-tenant-sub, x-tenant-host, x-tenant-domain, x-tenant-id, x-skip-tenant, x-skip-403-redirect, x-requested-with, accept, origin, user-agent, x-socket-id' always;
+      add_header 'Access-Control-Allow-Credentials' 'true' always;
+      add_header 'Access-Control-Max-Age' 86400 always;
+      add_header 'Content-Type' 'text/plain; charset=utf-8';
+      add_header 'Content-Length' 0;
+      return 204;
+    }
+
+    add_header 'Access-Control-Allow-Origin' "\$http_origin" always;
+    add_header 'Access-Control-Allow-Credentials' 'true' always;
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+    add_header 'Access-Control-Allow-Headers' 'authorization, content-type, x-tenant-sub, x-tenant-host, x-tenant-domain, x-tenant-id, x-skip-tenant, x-skip-403-redirect, x-requested-with, accept, origin, user-agent, x-socket-id' always;
+
+    proxy_hide_header 'Access-Control-Allow-Origin';
+    proxy_hide_header 'Access-Control-Allow-Credentials';
+    proxy_hide_header 'Access-Control-Allow-Methods';
+    proxy_hide_header 'Access-Control-Allow-Headers';
+
+    proxy_pass http://absenta_backend_upstream;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection "upgrade";
+  }
 
   location /socket.io/ {
     proxy_pass http://absenta_backend_upstream;
@@ -94,42 +214,53 @@ server {
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection "upgrade";
     proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
   }
 
-  location /api/socket.io/ {
-    proxy_pass http://absenta_backend_upstream;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade \$http_upgrade;
-    proxy_set_header Connection "upgrade";
+  location = /sw.js {
+    proxy_pass http://absenta_frontend_upstream;
     proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
+
+    add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0";
+    expires off;
+    add_header Service-Worker-Allowed "/";
   }
 
-  location / {
-    proxy_pass http://absenta_backend_upstream;
-    proxy_http_version 1.1;
+  location = /manifest.webmanifest {
+    proxy_pass http://absenta_frontend_upstream;
     proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
+
+    add_header Content-Type "application/manifest+json";
+    add_header Cache-Control "no-cache";
   }
-}
 
-server {
-  listen 80;
-  server_name ${FRONTEND_DOMAIN};
+  location = /manifest.json {
+    proxy_pass http://absenta_frontend_upstream;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
 
-  client_max_body_size 20m;
+    add_header Content-Type "application/manifest+json";
+    add_header Cache-Control "no-cache";
+  }
 
   location / {
     proxy_pass http://absenta_frontend_upstream;
-    proxy_http_version 1.1;
     proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
@@ -137,7 +268,6 @@ server {
 }
 EOF
   else
-    # Multi Backend - Single Frontend (API tersebar, FE satu node)
     read -p "Host frontend internal (default 127.0.0.1): " FRONTEND_HOST
     FRONTEND_HOST=${FRONTEND_HOST:-127.0.0.1}
 
@@ -149,37 +279,48 @@ server {
   listen 80;
   server_name ${API_DOMAIN};
 
-  client_max_body_size 20m;
+  return 301 https://\$host\$request_uri;
+}
 
-  location /socket.io/ {
-    proxy_pass http://absenta_backend_upstream;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade \$http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-  }
+server {
+  listen 443 ssl http2;
+  server_name ${API_DOMAIN};
 
-  location /api/socket.io/ {
-    proxy_pass http://absenta_backend_upstream;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade \$http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-  }
+  ssl_certificate /etc/letsencrypt/live/${CERT_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${CERT_DOMAIN}/privkey.pem;
 
   location / {
+    if (\$request_method = 'OPTIONS') {
+      add_header 'Access-Control-Allow-Origin' "\$http_origin" always;
+      add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+      add_header 'Access-Control-Allow-Headers' 'authorization, content-type, x-tenant-sub, x-tenant-host, x-tenant-domain, x-tenant-id, x-skip-tenant, x-skip-403-redirect, x-requested-with, accept, origin, user-agent, x-socket-id' always;
+      add_header 'Access-Control-Allow-Credentials' 'true' always;
+      add_header 'Access-Control-Max-Age' 86400 always;
+      add_header 'Content-Type' 'text/plain; charset=utf-8';
+      add_header 'Content-Length' 0;
+      return 204;
+    }
+
+    add_header 'Access-Control-Allow-Origin' "\$http_origin" always;
+    add_header 'Access-Control-Allow-Credentials' 'true' always;
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+    add_header 'Access-Control-Allow-Headers' 'authorization, content-type, x-tenant-sub, x-tenant-host, x-tenant-domain, x-tenant-id, x-skip-tenant, x-skip-403-redirect, x-requested-with, accept, origin, user-agent, x-socket-id' always;
+
+    proxy_hide_header 'Access-Control-Allow-Origin';
+    proxy_hide_header 'Access-Control-Allow-Credentials';
+    proxy_hide_header 'Access-Control-Allow-Methods';
+    proxy_hide_header 'Access-Control-Allow-Headers';
+
     proxy_pass http://absenta_backend_upstream;
-    proxy_http_version 1.1;
     proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
+
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection "upgrade";
   }
 }
 
@@ -187,12 +328,130 @@ server {
   listen 80;
   server_name ${FRONTEND_DOMAIN};
 
-  client_max_body_size 20m;
+  return 301 https://\$host\$request_uri;
+}
+
+server {
+  listen 443 ssl http2;
+  server_name ${FRONTEND_DOMAIN};
+
+  ssl_certificate /etc/letsencrypt/live/${CERT_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${CERT_DOMAIN}/privkey.pem;
+
+  location ^~ /webhooks/ {
+    proxy_pass http://absenta_backend_upstream;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+  }
+
+  location ^~ /payment/ {
+    proxy_pass http://absenta_backend_upstream;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+  }
+
+  location ^~ /invoice/public/ {
+    proxy_pass http://absenta_backend_upstream;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+  }
+
+  location /api/ {
+    if (\$request_method = 'OPTIONS') {
+      add_header 'Access-Control-Allow-Origin' "\$http_origin" always;
+      add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+      add_header 'Access-Control-Allow-Headers' 'authorization, content-type, x-tenant-sub, x-tenant-host, x-tenant-domain, x-tenant-id, x-skip-tenant, x-skip-403-redirect, x-requested-with, accept, origin, user-agent, x-socket-id' always;
+      add_header 'Access-Control-Allow-Credentials' 'true' always;
+      add_header 'Access-Control-Max-Age' 86400 always;
+      add_header 'Content-Type' 'text/plain; charset=utf-8';
+      add_header 'Content-Length' 0;
+      return 204;
+    }
+
+    add_header 'Access-Control-Allow-Origin' "\$http_origin" always;
+    add_header 'Access-Control-Allow-Credentials' 'true' always;
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+    add_header 'Access-Control-Allow-Headers' 'authorization, content-type, x-tenant-sub, x-tenant-host, x-tenant-domain, x-tenant-id, x-skip-tenant, x-skip-403-redirect, x-requested-with, accept, origin, user-agent, x-socket-id' always;
+
+    proxy_hide_header 'Access-Control-Allow-Origin';
+    proxy_hide_header 'Access-Control-Allow-Credentials';
+    proxy_hide_header 'Access-Control-Allow-Methods';
+    proxy_hide_header 'Access-Control-Allow-Headers';
+
+    proxy_pass http://absenta_backend_upstream;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection "upgrade";
+  }
+
+  location /socket.io/ {
+    proxy_pass http://absenta_backend_upstream;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+  }
+
+  location = /sw.js {
+    proxy_pass http://${FRONTEND_HOST}:${FRONTEND_PORT};
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+
+    add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0";
+    expires off;
+    add_header Service-Worker-Allowed "/";
+  }
+
+  location = /manifest.webmanifest {
+    proxy_pass http://${FRONTEND_HOST}:${FRONTEND_PORT};
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+
+    add_header Content-Type "application/manifest+json";
+    add_header Cache-Control "no-cache";
+  }
+
+  location = /manifest.json {
+    proxy_pass http://${FRONTEND_HOST}:${FRONTEND_PORT};
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+
+    add_header Content-Type "application/manifest+json";
+    add_header Cache-Control "no-cache";
+  }
 
   location / {
     proxy_pass http://${FRONTEND_HOST}:${FRONTEND_PORT};
-    proxy_http_version 1.1;
     proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
@@ -201,43 +460,53 @@ server {
 EOF
   fi
 else
-  # Single Backend - Single Frontend
   cat > "$NGINX_CONF" <<EOF
 server {
   listen 80;
   server_name ${API_DOMAIN};
 
-  client_max_body_size 20m;
+  return 301 https://\$host\$request_uri;
+}
 
-  location /socket.io/ {
-    proxy_pass http://127.0.0.1:${BACKEND_PORT};
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade \$http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-  }
+server {
+  listen 443 ssl http2;
+  server_name ${API_DOMAIN};
 
-  location /api/socket.io/ {
-    proxy_pass http://127.0.0.1:${BACKEND_PORT};
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade \$http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-  }
+  ssl_certificate /etc/letsencrypt/live/${CERT_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${CERT_DOMAIN}/privkey.pem;
 
   location / {
-    proxy_pass http://127.0.0.1:${BACKEND_PORT};
-    proxy_http_version 1.1;
+    if (\$request_method = 'OPTIONS') {
+      add_header 'Access-Control-Allow-Origin' "\$http_origin" always;
+      add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+      add_header 'Access-Control-Allow-Headers' 'authorization, content-type, x-tenant-sub, x-tenant-host, x-tenant-domain, x-tenant-id, x-skip-tenant, x-skip-403-redirect, x-requested-with, accept, origin, user-agent, x-socket-id' always;
+      add_header 'Access-Control-Allow-Credentials' 'true' always;
+      add_header 'Access-Control-Max-Age' 86400 always;
+      add_header 'Content-Type' 'text/plain; charset=utf-8';
+      add_header 'Content-Length' 0;
+      return 204;
+    }
+
+    add_header 'Access-Control-Allow-Origin' "\$http_origin" always;
+    add_header 'Access-Control-Allow-Credentials' 'true' always;
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+    add_header 'Access-Control-Allow-Headers' 'authorization, content-type, x-tenant-sub, x-tenant-host, x-tenant-domain, x-tenant-id, x-skip-tenant, x-skip-403-redirect, x-requested-with, accept, origin, user-agent, x-socket-id' always;
+
+    proxy_hide_header 'Access-Control-Allow-Origin';
+    proxy_hide_header 'Access-Control-Allow-Credentials';
+    proxy_hide_header 'Access-Control-Allow-Methods';
+    proxy_hide_header 'Access-Control-Allow-Headers';
+
+    proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
     proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
+
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection "upgrade";
   }
 }
 
@@ -245,12 +514,130 @@ server {
   listen 80;
   server_name ${FRONTEND_DOMAIN};
 
-  client_max_body_size 20m;
+  return 301 https://\$host\$request_uri;
+}
+
+server {
+  listen 443 ssl http2;
+  server_name ${FRONTEND_DOMAIN};
+
+  ssl_certificate /etc/letsencrypt/live/${CERT_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${CERT_DOMAIN}/privkey.pem;
+
+  location ^~ /webhooks/ {
+    proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+  }
+
+  location ^~ /payment/ {
+    proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+  }
+
+  location ^~ /invoice/public/ {
+    proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+  }
+
+  location /api/ {
+    if (\$request_method = 'OPTIONS') {
+      add_header 'Access-Control-Allow-Origin' "\$http_origin" always;
+      add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+      add_header 'Access-Control-Allow-Headers' 'authorization, content-type, x-tenant-sub, x-tenant-host, x-tenant-domain, x-tenant-id, x-skip-tenant, x-skip-403-redirect, x-requested-with, accept, origin, user-agent, x-socket-id' always;
+      add_header 'Access-Control-Allow-Credentials' 'true' always;
+      add_header 'Access-Control-Max-Age' 86400 always;
+      add_header 'Content-Type' 'text/plain; charset=utf-8';
+      add_header 'Content-Length' 0;
+      return 204;
+    }
+
+    add_header 'Access-Control-Allow-Origin' "\$http_origin" always;
+    add_header 'Access-Control-Allow-Credentials' 'true' always;
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+    add_header 'Access-Control-Allow-Headers' 'authorization, content-type, x-tenant-sub, x-tenant-host, x-tenant-domain, x-tenant-id, x-skip-tenant, x-skip-403-redirect, x-requested-with, accept, origin, user-agent, x-socket-id' always;
+
+    proxy_hide_header 'Access-Control-Allow-Origin';
+    proxy_hide_header 'Access-Control-Allow-Credentials';
+    proxy_hide_header 'Access-Control-Allow-Methods';
+    proxy_hide_header 'Access-Control-Allow-Headers';
+
+    proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection "upgrade";
+  }
+
+  location /socket.io/ {
+    proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+  }
+
+  location = /sw.js {
+    proxy_pass http://${FRONTEND_HOST}:${FRONTEND_PORT};
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+
+    add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0";
+    expires off;
+    add_header Service-Worker-Allowed "/";
+  }
+
+  location = /manifest.webmanifest {
+    proxy_pass http://${FRONTEND_HOST}:${FRONTEND_PORT};
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+
+    add_header Content-Type "application/manifest+json";
+    add_header Cache-Control "no-cache";
+  }
+
+  location = /manifest.json {
+    proxy_pass http://${FRONTEND_HOST}:${FRONTEND_PORT};
+    proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+
+    add_header Content-Type "application/manifest+json";
+    add_header Cache-Control "no-cache";
+  }
 
   location / {
-    proxy_pass http://127.0.0.1:${FRONTEND_PORT};
-    proxy_http_version 1.1;
+    proxy_pass http://${FRONTEND_HOST}:${FRONTEND_PORT};
     proxy_set_header Host \$host;
+    proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
