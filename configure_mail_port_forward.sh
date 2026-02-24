@@ -57,38 +57,103 @@ echo ""
 
 MAIL_PORTS="25 465 587 110 995 143 993"
 
+# Fungsi helper untuk membersihkan aturan lama yang konflik (target berbeda)
+ensure_dnat_rule() {
+  local IFACE=$1
+  local PORT=$2
+  local TARGET=$3 # IP:PORT
+
+  # 1. Cleanup: Hapus aturan DNAT pada port/interface yang sama TAPI target berbeda
+  # Ambil semua aturan PREROUTING yang match interface & port
+  iptables -t nat -S PREROUTING | grep "\-i $IFACE" | grep "\-p tcp" | grep "\-\-dport $PORT" | grep "\-j DNAT" | while read -r rule; do
+    # Cek apakah rule ini mengarah ke target yang diinginkan
+    if echo "$rule" | grep -q "\-\-to-destination $TARGET"; then
+       # Match, biarkan (nanti dicek lagi di langkah 2)
+       continue
+    else
+       # Tidak match (conflict/old), hapus
+       local del_cmd="${rule/-A/-D}"
+       echo "  - [CLEANUP] Menghapus aturan lama/konflik: $del_cmd"
+       iptables -t nat $del_cmd
+    fi
+  done
+
+  # 2. Idempotency: Cek apakah aturan yang diinginkan sudah ada
+  if iptables -t nat -C PREROUTING -i "$IFACE" -p tcp --dport "$PORT" -j DNAT --to-destination "$TARGET" 2>/dev/null; then
+    echo "  - [OK] Aturan DNAT sudah sesuai."
+  else
+    iptables -t nat -A PREROUTING -i "$IFACE" -p tcp --dport "$PORT" -j DNAT --to-destination "$TARGET"
+    echo "  - [ADD] Aturan DNAT ditambahkan."
+  fi
+}
+
+ensure_forward_in_rule() {
+  local IFACE_IN=$1
+  local IFACE_OUT=$2
+  local DEST_IP=$3
+  local PORT=$4
+
+  # Cleanup: Hapus aturan FORWARD (IN->WG) pada port yang sama tapi IP tujuan beda (jika ada)
+  # Ini agak agresif, jadi kita batasi hanya hapus jika benar-benar konflik di port yang sama
+  iptables -S FORWARD | grep "\-i $IFACE_IN" | grep "\-o $IFACE_OUT" | grep "\-p tcp" | grep "\-\-dport $PORT" | while read -r rule; do
+     if echo "$rule" | grep -q "\-d $DEST_IP"; then
+        continue
+     else
+        local del_cmd="${rule/-A/-D}"
+        echo "  - [CLEANUP] Menghapus aturan FORWARD lama: $del_cmd"
+        iptables $del_cmd
+     fi
+  done
+
+  if iptables -C FORWARD -i "$IFACE_IN" -o "$IFACE_OUT" -p tcp -d "$DEST_IP" --dport "$PORT" -j ACCEPT 2>/dev/null; then
+    echo "  - [OK] Aturan FORWARD (IN -> WG) sudah ada."
+  else
+    iptables -A FORWARD -i "$IFACE_IN" -o "$IFACE_OUT" -p tcp -d "$DEST_IP" --dport "$PORT" -j ACCEPT
+    echo "  - [ADD] Aturan FORWARD (IN -> WG) ditambahkan."
+  fi
+}
+
+ensure_forward_out_rule() {
+  local IFACE_IN=$1
+  local IFACE_OUT=$2
+  local SOURCE_IP=$3
+  local PORT=$4
+
+  # Cleanup: Hapus aturan FORWARD (WG->OUT) pada port yang sama tapi IP sumber beda
+  iptables -S FORWARD | grep "\-i $IFACE_IN" | grep "\-o $IFACE_OUT" | grep "\-p tcp" | grep "\-\-sport $PORT" | while read -r rule; do
+     if echo "$rule" | grep -q "\-s $SOURCE_IP"; then
+        continue
+     else
+        local del_cmd="${rule/-A/-D}"
+        echo "  - [CLEANUP] Menghapus aturan FORWARD lama: $del_cmd"
+        iptables $del_cmd
+     fi
+  done
+
+  if iptables -C FORWARD -i "$IFACE_IN" -o "$IFACE_OUT" -p tcp -s "$SOURCE_IP" --sport "$PORT" -j ACCEPT 2>/dev/null; then
+    echo "  - [OK] Aturan FORWARD (WG -> OUT) sudah ada."
+  else
+    iptables -A FORWARD -i "$IFACE_IN" -o "$IFACE_OUT" -p tcp -s "$SOURCE_IP" --sport "$PORT" -j ACCEPT
+    echo "  - [ADD] Aturan FORWARD (WG -> OUT) ditambahkan."
+  fi
+}
+
 for PORT in $MAIL_PORTS; do
-  echo "Memastikan DNAT untuk port TCP ${PORT} -> ${MAIL_IP}:${PORT} ..."
-  if iptables -t nat -C PREROUTING -i "$IFACE_OUT" -p tcp --dport "$PORT" -j DNAT --to-destination "${MAIL_IP}:${PORT}" 2>/dev/null; then
-    echo "  - Aturan DNAT sudah ada, lewati."
-  else
-    iptables -t nat -A PREROUTING -i "$IFACE_OUT" -p tcp --dport "$PORT" -j DNAT --to-destination "${MAIL_IP}:${PORT}"
-    echo "  - Aturan DNAT ditambahkan."
-  fi
-
-  echo "Memastikan aturan FORWARD untuk trafik ke ${MAIL_IP}:${PORT} ..."
-  if iptables -C FORWARD -i "$IFACE_OUT" -o "$WG_IFACE" -p tcp -d "$MAIL_IP" --dport "$PORT" -j ACCEPT 2>/dev/null; then
-    echo "  - Aturan FORWARD (IN -> WG) sudah ada."
-  else
-    iptables -A FORWARD -i "$IFACE_OUT" -o "$WG_IFACE" -p tcp -d "$MAIL_IP" --dport "$PORT" -j ACCEPT
-    echo "  - Aturan FORWARD (IN -> WG) ditambahkan."
-  fi
-
-  if iptables -C FORWARD -i "$WG_IFACE" -o "$IFACE_OUT" -p tcp -s "$MAIL_IP" --sport "$PORT" -j ACCEPT 2>/dev/null; then
-    echo "  - Aturan FORWARD (WG -> OUT) sudah ada."
-  else
-    iptables -A FORWARD -i "$WG_IFACE" -o "$IFACE_OUT" -p tcp -s "$MAIL_IP" --sport "$PORT" -j ACCEPT
-    echo "  - Aturan FORWARD (WG -> OUT) ditambahkan."
-  fi
+  echo "Memproses Port TCP ${PORT}..."
+  
+  ensure_dnat_rule "$IFACE_OUT" "$PORT" "${MAIL_IP}:${PORT}"
+  ensure_forward_in_rule "$IFACE_OUT" "$WG_IFACE" "$MAIL_IP" "$PORT"
+  ensure_forward_out_rule "$WG_IFACE" "$IFACE_OUT" "$MAIL_IP" "$PORT"
+  
 done
 
 echo ""
 echo "Memastikan aturan MASQUERADE untuk trafik keluar dari ${MAIL_IP} melalui ${IFACE_OUT} ..."
 if iptables -t nat -C POSTROUTING -s "$MAIL_IP" -o "$IFACE_OUT" -j MASQUERADE 2>/dev/null; then
-  echo "  - Aturan MASQUERADE sudah ada."
+  echo "  - [OK] Aturan MASQUERADE sudah ada."
 else
   iptables -t nat -A POSTROUTING -s "$MAIL_IP" -o "$IFACE_OUT" -j MASQUERADE
-  echo "  - Aturan MASQUERADE ditambahkan."
+  echo "  - [ADD] Aturan MASQUERADE ditambahkan."
 fi
 
 echo ""
