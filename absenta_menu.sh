@@ -1320,7 +1320,18 @@ rebuild_backend_app() {
   fi
   cd "$APP_DIR" || return
   echo "Menjalankan npm run build untuk backend di $APP_DIR ..."
-  npm run build || echo "npm run build backend gagal. Cek log di atas."
+  if npm run build; then
+    if command -v pm2 >/dev/null 2>&1; then
+      if pm2 list | grep -q "absenta-backend"; then
+        pm2 reload absenta-backend || echo "Gagal reload proses PM2 absenta-backend."
+      else
+        pm2 start dist/main.js --name absenta-backend --node-args "-r tsconfig-paths/register" || echo "Gagal start proses PM2 absenta-backend."
+      fi
+      pm2 save || true
+    fi
+  else
+    echo "npm run build backend gagal. Cek log di atas."
+  fi
 }
 
 rebuild_frontend_app() {
@@ -1335,7 +1346,18 @@ rebuild_frontend_app() {
   fi
   cd "$APP_DIR" || return
   echo "Menjalankan npm run build untuk frontend di $APP_DIR ..."
-  npm run build || echo "npm run build frontend gagal. Cek log di atas."
+  if npm run build; then
+    if command -v pm2 >/dev/null 2>&1; then
+      if pm2 list | grep -q "absenta-frontend"; then
+        pm2 reload absenta-frontend || echo "Gagal reload proses PM2 absenta-frontend."
+      else
+        pm2 start "serve -s dist -l 8080" --name absenta-frontend || echo "Gagal start proses PM2 absenta-frontend."
+      fi
+      pm2 save || true
+    fi
+  else
+    echo "npm run build frontend gagal. Cek log di atas."
+  fi
 }
 
 reboot_system_menu() {
