@@ -55,7 +55,7 @@ echo "Aturan FORWARD terkait IP ${MAIL_IP}:"
 iptables -S FORWARD 2>/dev/null | grep -F "$MAIL_IP" || echo "(Tidak ada aturan FORWARD spesifik untuk ${MAIL_IP} yang terdeteksi)"
 echo ""
 
-MAIL_PORTS="25 465 587 993 995"
+MAIL_PORTS="25 465 587 110 995 143 993"
 
 for PORT in $MAIL_PORTS; do
   echo "Memastikan DNAT untuk port TCP ${PORT} -> ${MAIL_IP}:${PORT} ..."
@@ -93,7 +93,7 @@ fi
 
 echo ""
 echo "=== Ringkasan aturan NAT terkait port mail SETELAH perubahan ==="
-iptables -t nat -S PREROUTING 2>/dev/null | grep -E 'dport (25|465|587|993|995)' || echo "(Tidak ada aturan PREROUTING khusus port mail yang terdeteksi)"
+iptables -t nat -S PREROUTING 2>/dev/null | grep -E 'dport (25|465|587|110|995|143|993)' || echo "(Tidak ada aturan PREROUTING khusus port mail yang terdeteksi)"
 echo ""
 echo "Aturan FORWARD terkait IP ${MAIL_IP}:"
 iptables -S FORWARD 2>/dev/null | grep -F "$MAIL_IP" || echo "(Tidak ada aturan FORWARD spesifik untuk ${MAIL_IP} yang terdeteksi)"
