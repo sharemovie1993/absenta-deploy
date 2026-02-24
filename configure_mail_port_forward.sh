@@ -15,13 +15,38 @@ echo "- Menambahkan DNAT dari IP publik VPS ke IP mail server di tunnel"
 echo "- Menambahkan aturan FORWARD dan MASQUERADE jika diperlukan"
 echo ""
 
+# Auto-install dependencies
+echo "Memeriksa dependensi..."
+DEPS_TO_INSTALL=""
+
 if ! command -v iptables >/dev/null 2>&1; then
-  echo "iptables tidak ditemukan di server ini. Install paket iptables terlebih dahulu."
-  exit 1
+  echo "  - iptables tidak ditemukan."
+  DEPS_TO_INSTALL="$DEPS_TO_INSTALL iptables"
 fi
 
 if ! command -v ip >/dev/null 2>&1; then
-  echo "Perintah 'ip' tidak ditemukan. Script ini membutuhkan iproute2."
+  echo "  - iproute2 (ip command) tidak ditemukan."
+  DEPS_TO_INSTALL="$DEPS_TO_INSTALL iproute2"
+fi
+
+if ! command -v netfilter-persistent >/dev/null 2>&1; then
+  echo "  - netfilter-persistent tidak ditemukan."
+  DEPS_TO_INSTALL="$DEPS_TO_INSTALL iptables-persistent netfilter-persistent"
+fi
+
+if [ -n "$DEPS_TO_INSTALL" ]; then
+  echo "Menginstall paket yang diperlukan: $DEPS_TO_INSTALL ..."
+  apt-get update -qq
+  DEBIAN_FRONTEND=noninteractive apt-get install -y $DEPS_TO_INSTALL
+  echo "Dependensi berhasil diinstall."
+else
+  echo "Semua dependensi sudah terpasang."
+fi
+
+echo ""
+
+if ! command -v iptables >/dev/null 2>&1; then
+  echo "Gagal menginstall iptables."
   exit 1
 fi
 
@@ -168,8 +193,7 @@ if command -v netfilter-persistent >/dev/null 2>&1; then
   echo "Menyimpan konfigurasi iptables via netfilter-persistent..."
   netfilter-persistent save || echo "Gagal menyimpan iptables via netfilter-persistent."
 else
-  echo "netfilter-persistent tidak ditemukan. Aturan iptables ini akan hilang setelah reboot."
-  echo "Pertimbangkan untuk menginstall paket iptables-persistent/netfilter-persistent agar aturan bertahan setelah reboot."
+  echo "WARNING: netfilter-persistent gagal dijalankan meskipun sudah diinstall."
 fi
 
 echo ""
