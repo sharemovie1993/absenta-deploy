@@ -425,6 +425,7 @@ menu_nginx() {
     echo "=== 6. Nginx Reverse Proxy ==="
     echo "6.1 Deploy/Update Nginx reverse proxy untuk app/api"
     echo "6.2 Backup/Hapus konfigurasi Nginx lama (cek konflik server_name)"
+    echo "6.3 Update Konfigurasi untuk Mail (Mailcow/webmail)"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -434,6 +435,10 @@ menu_nginx() {
         ;;
       2|6.2)
         bash "$SCRIPT_DIR/cleanup_nginx_legacy.sh"
+        pause
+        ;;
+      3|6.3)
+        bash "$SCRIPT_DIR/update_nginx_mail_config.sh"
         pause
         ;;
       0)
@@ -1516,6 +1521,7 @@ menu_deploy() {
     echo "9. PostgreSQL"
     echo "10. Mail Server"
     echo "11. Manajemen Paket"
+    echo "12. Konfigurasi Port Forward Mail Server"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -1555,6 +1561,10 @@ menu_deploy() {
         ;;
       11)
         menu_packages
+        ;;
+      12)
+        bash "$SCRIPT_DIR/configure_mail_port_forward.sh"
+        pause
         ;;
       0)
         break
