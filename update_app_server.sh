@@ -25,10 +25,24 @@ fi
 echo "▶ Update backend..."
 cd "$BACKEND_DIR"
 
+BACKEND_ENV_FILES=(".env")
+for f in "${BACKEND_ENV_FILES[@]}"; do
+  if [ -f "$f" ]; then
+    cp "$f" "/tmp/absenta-backend-${f##*/}.bak" || true
+  fi
+done
+
 if [ -d ".git" ]; then
   git fetch --all
   git pull
 fi
+
+for f in "${BACKEND_ENV_FILES[@]}"; do
+  BAK="/tmp/absenta-backend-${f##*/}.bak"
+  if [ -f "$BAK" ]; then
+    cp "$BAK" "$f" || true
+  fi
+done
 
 npm install
 npx prisma generate
@@ -46,10 +60,24 @@ pm2 save
 echo "▶ Update frontend..."
 cd "$FRONTEND_DIR"
 
+FRONTEND_ENV_FILES=(".env")
+for f in "${FRONTEND_ENV_FILES[@]}"; do
+  if [ -f "$f" ]; then
+    cp "$f" "/tmp/absenta-frontend-${f##*/}.bak" || true
+  fi
+done
+
 if [ -d ".git" ]; then
   git fetch --all
   git pull
 fi
+
+for f in "${FRONTEND_ENV_FILES[@]}"; do
+  BAK="/tmp/absenta-frontend-${f##*/}.bak"
+  if [ -f "$BAK" ]; then
+    cp "$BAK" "$f" || true
+  fi
+done
 
 npm install
 npm run build
