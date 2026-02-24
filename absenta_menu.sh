@@ -1061,6 +1061,20 @@ diagnose_pm2_simple() {
   fi
 }
 
+backend_console_logs() {
+  clear
+  echo "=== Console Backend (PM2 logs absenta-backend) ==="
+  if ! command -v pm2 >/dev/null 2>&1; then
+    echo "pm2 tidak ditemukan di PATH."
+    return
+  fi
+  if ! pm2 list | grep -q "absenta-backend"; then
+    echo "Proses PM2 absenta-backend tidak ditemukan di PM2."
+    return
+  fi
+  pm2 logs absenta-backend --lines 100 || echo "Gagal menampilkan log proses absenta-backend."
+ }
+
 diagnose_wireguard_ping() {
   read -p "IP tujuan WireGuard yang ingin di-ping (contoh 10.50.0.1): " TARGET_IP
   if [ -z "$TARGET_IP" ]; then
@@ -1643,6 +1657,8 @@ while true; do
   echo "4. Keamanan Server (Hardening)"
   echo "5. Konfigurasi IP Address"
   echo "6. Maintenance & Rebuild"
+  echo "7. PM2 & Monitoring Proses"
+  echo "8. Console Backend"
   echo "0. Keluar"
   read -p "Pilih menu: " main_choice
   case "$main_choice" in
@@ -1663,6 +1679,13 @@ while true; do
       ;;
     6)
       menu_maintenance
+      ;;
+    7)
+      menu_pm2
+      ;;
+    8)
+      backend_console_logs
+      pause
       ;;
     0)
       echo "Keluar."
