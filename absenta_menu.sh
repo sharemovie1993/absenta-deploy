@@ -1506,6 +1506,44 @@ menu_packages() {
   done
 }
 
+menu_mail_server() {
+  while true; do
+    clear
+    echo "=== Deploy Mail Server ==="
+    echo "1. Deploy/Setup server baru"
+    echo "2. Konfigurasi Port Forward Mail Server"
+    echo "3. Restart Layanan"
+    echo "4. Status Layanan (bersi informasi terkait mail server)"
+    echo "0. Kembali"
+    read -p "Pilih: " choice
+    case "$choice" in
+      1)
+        bash "$SCRIPT_DIR/deploy_mail_server.sh"
+        pause
+        ;;
+      2)
+        bash "$SCRIPT_DIR/configure_mail_port_forward.sh"
+        pause
+        ;;
+      3)
+        bash "$SCRIPT_DIR/restart_mail_services.sh"
+        pause
+        ;;
+      4)
+        bash "$SCRIPT_DIR/check_mail_status.sh"
+        pause
+        ;;
+      0)
+        break
+        ;;
+      *)
+        echo "Pilihan tidak dikenal"
+        pause
+        ;;
+    esac
+  done
+}
+
 menu_deploy() {
   while true; do
     clear
@@ -1519,9 +1557,8 @@ menu_deploy() {
     echo "7. WireGuard VPN"
     echo "8. Redis"
     echo "9. PostgreSQL"
-    echo "10. Mail Server"
+    echo "10. Mail Server (Menu)"
     echo "11. Manajemen Paket"
-    echo "12. Konfigurasi Port Forward Mail Server"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -1556,15 +1593,10 @@ menu_deploy() {
         menu_db_server
         ;;
       10)
-        bash "$SCRIPT_DIR/deploy_mail_server.sh"
-        pause
+        menu_mail_server
         ;;
       11)
         menu_packages
-        ;;
-      12)
-        bash "$SCRIPT_DIR/configure_mail_port_forward.sh"
-        pause
         ;;
       0)
         break
