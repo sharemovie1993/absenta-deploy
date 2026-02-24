@@ -8,7 +8,8 @@ fi
 
 echo "=== Deploy Mail Server dengan GUI (Mailcow Dockerized) ==="
 echo "Script ini akan:"
-echo "- Menginstall docker dan docker compose plugin (jika belum ada)"
+echo "- Menginstall docker (jika belum ada)"
+echo "- Menginstall docker compose (plugin atau docker-compose) jika belum ada"
 echo "- Menginstall git"
 echo "- Meng-clone mailcow/mailcow-dockerized ke /opt/mailcow-dockerized"
 echo ""
@@ -21,12 +22,35 @@ fi
 echo "Memperbarui package index..."
 apt-get update -y
 
-echo "Menginstall dependensi docker, docker-compose-plugin, git..."
-apt-get install -y docker.io docker-compose-plugin git
+echo "Menginstall dependensi docker dan git..."
+apt-get install -y docker.io git
 
 echo "Mengaktifkan dan memulai service docker..."
 systemctl enable docker
 systemctl start docker
+
+echo "Mendeteksi perintah docker compose / docker-compose..."
+COMPOSE_CMD=""
+if docker compose version >/dev/null 2>&1; then
+  COMPOSE_CMD="docker compose"
+elif command -v docker-compose >/dev/null 2>&1; then
+  COMPOSE_CMD="docker-compose"
+else
+  echo "docker compose / docker-compose belum terpasang, mencoba menginstall docker-compose-plugin..."
+  if apt-get install -y docker-compose-plugin; then
+    if docker compose version >/dev/null 2>&1; then
+      COMPOSE_CMD="docker compose"
+    fi
+  fi
+fi
+
+if [ -z "$COMPOSE_CMD" ]; then
+  echo "Gagal menemukan docker compose atau docker-compose."
+  echo "Silakan pastikan paket docker-compose-plugin atau docker-compose terinstal secara manual."
+  exit 1
+fi
+
+echo "Menggunakan perintah: $COMPOSE_CMD"
 
 MAILCOW_DIR="/opt/mailcow-dockerized"
 
@@ -58,11 +82,11 @@ if [ "$GENCONF" = "y" ]; then
 fi
 
 echo ""
-echo "=== Menjalankan mail server (docker compose up -d) ==="
-read -p "Jalankan 'docker compose up -d' untuk menghidupkan semua layanan mail server? (y/n): " RUN_MAIL
+echo "=== Menjalankan mail server ($COMPOSE_CMD up -d) ==="
+read -p "Jalankan '$COMPOSE_CMD up -d' untuk menghidupkan semua layanan mail server? (y/n): " RUN_MAIL
 if [ "$RUN_MAIL" = "y" ]; then
-  docker compose pull
-  docker compose up -d
+  $COMPOSE_CMD pull
+  $COMPOSE_CMD up -d
 fi
 
 echo ""
