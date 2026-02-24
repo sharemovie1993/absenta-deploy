@@ -1514,6 +1514,7 @@ menu_mail_server() {
     echo "2. Konfigurasi Port Forward Mail Server"
     echo "3. Restart Layanan"
     echo "4. Status Layanan (bersi informasi terkait mail server)"
+    echo "5. Konfigurasi Internal Mail Server (Jalankan di VM Mail)"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -1531,6 +1532,10 @@ menu_mail_server() {
         ;;
       4)
         bash "$SCRIPT_DIR/check_mail_status.sh"
+        pause
+        ;;
+      5)
+        bash "$SCRIPT_DIR/configure_mail_server_internal.sh"
         pause
         ;;
       0)
