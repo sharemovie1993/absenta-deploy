@@ -22,8 +22,8 @@ fi
 echo "Memperbarui package index..."
 apt-get update -y
 
-echo "Menginstall dependensi docker dan git..."
-apt-get install -y docker.io git
+echo "Menginstall dependensi docker, git, dan curl..."
+apt-get install -y docker.io git curl
 
 echo "Mengaktifkan dan memulai service docker..."
 systemctl enable docker
@@ -42,6 +42,18 @@ else
       COMPOSE_CMD="docker compose"
     fi
   fi
+fi
+
+if [ -z "$COMPOSE_CMD" ]; then
+  echo "docker-compose-plugin tidak tersedia atau gagal diinstall, mencoba menginstall docker-compose standalone..."
+  if command -v curl >/dev/null 2>&1; then
+    curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose || true
+    chmod +x /usr/local/bin/docker-compose || true
+  fi
+fi
+
+if [ -z "$COMPOSE_CMD" ] && command -v docker-compose >/dev/null 2>&1; then
+  COMPOSE_CMD="docker-compose"
 fi
 
 if [ -z "$COMPOSE_CMD" ]; then
