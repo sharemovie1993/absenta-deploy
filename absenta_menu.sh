@@ -1516,6 +1516,7 @@ menu_mail_server() {
     echo "4. Status Layanan (bersi informasi terkait mail server)"
     echo "5. Konfigurasi Internal Mail Server (Jalankan di VM Mail)"
     echo "6. Reset Password Admin Mail (Jalankan di VM Mail)"
+    echo "7. Konfigurasi SMTP Aplikasi Backend (Jalankan di App Server)"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -1541,6 +1542,10 @@ menu_mail_server() {
         ;;
       6)
         bash "$SCRIPT_DIR/reset_mail_admin.sh"
+        pause
+        ;;
+      7)
+        bash "$SCRIPT_DIR/configure_app_smtp.sh"
         pause
         ;;
       0)
