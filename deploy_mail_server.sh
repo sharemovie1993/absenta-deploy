@@ -22,8 +22,8 @@ fi
 echo "Memperbarui package index..."
 apt-get update -y
 
-echo "Menginstall dependensi docker, git, dan curl..."
-apt-get install -y docker.io git curl
+echo "Menginstall dependensi docker, git, curl, dan jq (syarat Mailcow)..."
+apt-get install -y docker.io git curl jq
 
 echo "Mengaktifkan dan memulai service docker..."
 systemctl enable docker
