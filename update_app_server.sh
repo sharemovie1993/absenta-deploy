@@ -33,6 +33,8 @@ for f in "${BACKEND_ENV_FILES[@]}"; do
 done
 
 if [ -d ".git" ]; then
+  echo "Mereset perubahan lokal..."
+  git reset --hard
   git fetch --all
   git pull
 fi
@@ -68,6 +70,8 @@ for f in "${FRONTEND_ENV_FILES[@]}"; do
 done
 
 if [ -d ".git" ]; then
+  echo "Mereset perubahan lokal..."
+  git reset --hard
   git fetch --all
   git pull
 fi
