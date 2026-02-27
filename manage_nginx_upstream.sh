@@ -70,6 +70,52 @@ list_down() {
   ' "$NGINX_CONF"
 }
 
+check_tcp() {
+  local HOST="$1"
+  local PORT="$2"
+  if command -v nc >/dev/null 2>&1; then
+    nc -z -w 2 "$HOST" "$PORT"
+  else
+    (echo >"/dev/tcp/$HOST/$PORT") >/dev/null 2>&1
+  fi
+}
+
+auto_mark_down() {
+  local TARGET_UPSTREAM="$1"
+  backup_conf
+  local changed=0
+  while IFS='|' read -r UPSTREAM HOST PORT; do
+    if [ -n "$TARGET_UPSTREAM" ] && [ "$UPSTREAM" != "$TARGET_UPSTREAM" ]; then
+      continue
+    fi
+    if ! check_tcp "$HOST" "$PORT"; then
+      sed -E -i "s/(server[[:space:]]+${HOST}:${PORT}[^;]*);/\1 down;/" "$NGINX_CONF"
+      echo "Menandai ${UPSTREAM} ${HOST}:${PORT} sebagai down (deteksi otomatis)."
+      changed=1
+    fi
+  done < <(awk '
+    /^\s*upstream[[:space:]]+[^{]+{/ {
+      if (match($0, /upstream[[:space:]]+([^ \t{]+)/, m)) {
+        upstream=m[1]; in_upstream=1;
+      }
+      next
+    }
+    in_upstream && /}/ { in_upstream=0; upstream=""; next }
+    in_upstream && /server[[:space:]]+[0-9A-Za-z\.\-:]+/ {
+      if ($0 !~ /down[[:space:]]*;/) {
+        if (match($0, /server[[:space:]]+([0-9A-Za-z\.\-]+):([0-9]+)/, s)) {
+          print upstream "|" s[1] "|" s[2]
+        }
+      }
+    }
+  ' "$NGINX_CONF")
+  if [ "$changed" -eq 1 ]; then
+    nginx -t && systemctl reload nginx
+  else
+    echo "Tidak ada server yang terdeteksi down."
+  fi
+}
+
 interactive_menu() {
   while true; do
     clear
@@ -77,6 +123,7 @@ interactive_menu() {
     echo "1) Mark DOWN upstream server"
     echo "2) Mark UP upstream server"
     echo "3) Lihat server yang sedang DOWN"
+    echo "4) Auto-detect & Mark DOWN (semua/berdasar upstream)"
     echo "0) Kembali"
     read -p "Pilih: " CH
     case "$CH" in
@@ -96,6 +143,11 @@ interactive_menu() {
         list_down
         read -p "Tekan Enter untuk lanjut..."
         ;;
+      4)
+        read -p "Nama upstream (kosongkan untuk semua): " UPN
+        auto_mark_down "$UPN"
+        read -p "Tekan Enter untuk lanjut..."
+        ;;
       0)
         break
         ;;
@@ -113,6 +165,8 @@ elif [ "$1" = "up" ]; then
   mark_up "$2" "$3"
 elif [ "$1" = "list-down" ] || [ "$1" = "list" ]; then
   list_down
+elif [ "$1" = "auto" ] || [ "$1" = "auto-mark-down" ]; then
+  auto_mark_down "$2"
 else
   interactive_menu
 fi
