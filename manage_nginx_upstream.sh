@@ -143,9 +143,14 @@ add_server() {
     return 0
   fi
   backup_conf
-  sed -E -i "/upstream[[:space:]]+${UPN}[[:space:]]*\\{/,/\\}/{/\\}/{i\\    server ${HOST}:${PORT};}" "$NGINX_CONF"
+  if check_tcp "$HOST" "$PORT"; then
+    sed -E -i "/upstream[[:space:]]+${UPN}[[:space:]]*\\{/,/\\}/{/\\}/{i\\    server ${HOST}:${PORT};}" "$NGINX_CONF"
+    echo "Menambahkan server ${HOST}:${PORT} (UP) ke upstream ${UPN}."
+  else
+    sed -E -i "/upstream[[:space:]]+${UPN}[[:space:]]*\\{/,/\\}/{/\\}/{i\\    server ${HOST}:${PORT} down;}" "$NGINX_CONF"
+    echo "Menambahkan server ${HOST}:${PORT} (UNREACHABLE -> down) ke upstream ${UPN}."
+  fi
   nginx -t && systemctl reload nginx
-  echo "Menambahkan server ${HOST}:${PORT} ke upstream ${UPN}."
 }
 
 remove_server() {
@@ -166,6 +171,50 @@ remove_server() {
   echo "Menghapus server ${HOST}:${PORT} dari upstream ${UPN}."
 }
 
+auto_remove_down_or_unreachable() {
+  local TARGET_UPSTREAM="$1"
+  backup_conf
+  local changed=0
+  while IFS='|' read -r UPSTREAM HOST PORT FLAG; do
+    if [ -n "$TARGET_UPSTREAM" ] && [ "$UPSTREAM" != "$TARGET_UPSTREAM" ]; then
+      continue
+    fi
+    local should_remove=0
+    if [ "$FLAG" = "down" ]; then
+      should_remove=1
+    else
+      if ! check_tcp "$HOST" "$PORT"; then
+        should_remove=1
+      fi
+    fi
+    if [ "$should_remove" -eq 1 ]; then
+      sed -E -i "/upstream[[:space:]]+${UPSTREAM}[[:space:]]*\\{/,/\\}/{/server[[:space:]]+${HOST}:${PORT}([[:space:]]+down)?[[:space:]]*;/d}" "$NGINX_CONF"
+      echo "Menghapus ${UPSTREAM} ${HOST}:${PORT} (down/unreachable)."
+      changed=1
+    fi
+  done < <(awk '
+    /^\s*upstream[[:space:]]+[^{]+{/ {
+      if (match($0, /upstream[[:space:]]+([^ \t{]+)/, m)) {
+        upstream=m[1]; in_upstream=1;
+      }
+      next
+    }
+    in_upstream && /}/ { in_upstream=0; next }
+    in_upstream && /server[[:space:]]+[0-9A-Za-z\.\-:]+/ {
+      flag="";
+      if ($0 ~ /down[[:space:]]*;/) flag="down";
+      if (match($0, /server[[:space:]]+([0-9A-Za-z\.\-]+):([0-9]+)/, s)) {
+        print upstream "|" s[1] "|" s[2] "|" flag
+      }
+    }
+  ' "$NGINX_CONF")
+  if [ "$changed" -eq 1 ]; then
+    nginx -t && systemctl reload nginx
+  else
+    echo "Tidak ada server down/unreachable untuk dihapus."
+  fi
+}
+
 interactive_menu() {
   while true; do
     clear
@@ -176,6 +225,7 @@ interactive_menu() {
     echo "4) Auto-detect & Mark DOWN (semua/berdasar upstream)"
     echo "5) Tambah server ke upstream"
     echo "6) Hapus server dari upstream"
+    echo "7) Auto-remove server DOWN/tidak dapat diakses"
     echo "0) Kembali"
     read -p "Pilih: " CH
     case "$CH" in
@@ -214,6 +264,11 @@ interactive_menu() {
         remove_server "$UPN" "$HOST" "$PORT"
         read -p "Tekan Enter untuk lanjut..."
         ;;
+      7)
+        read -p "Nama upstream (kosongkan untuk semua): " UPN
+        auto_remove_down_or_unreachable "$UPN"
+        read -p "Tekan Enter untuk lanjut..."
+        ;;
       0)
         break
         ;;
@@ -237,6 +292,8 @@ elif [ "$1" = "add" ]; then
   add_server "$2" "$3" "$4"
 elif [ "$1" = "remove" ]; then
   remove_server "$2" "$3" "$4"
+elif [ "$1" = "auto-remove" ]; then
+  auto_remove_down_or_unreachable "$2"
 else
   interactive_menu
 fi
