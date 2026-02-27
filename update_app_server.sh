@@ -49,6 +49,14 @@ done
 npm install
 npx prisma generate
 npx prisma migrate deploy
+npx prisma db seed || true
+# Seed menu & data sistem (idempotent)
+if command -v npx >/dev/null 2>&1; then
+  echo "Menjalankan seed.ts (menu, roles, dsb)..."
+  npx ts-node -r tsconfig-paths/register prisma/seed.ts || echo "Seed prisma/seed.ts gagal (lanjutkan proses)"
+else
+  echo "npx tidak tersedia, melewati ts-node seed."
+fi
 npm run build
 
 if pm2 list | grep -q "absenta-backend"; then
