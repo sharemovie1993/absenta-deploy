@@ -426,6 +426,7 @@ menu_nginx() {
     echo "6.1 Deploy/Update Nginx reverse proxy untuk app/api"
     echo "6.2 Backup/Hapus konfigurasi Nginx lama (cek konflik server_name)"
     echo "6.3 Update Konfigurasi untuk Mail (Mailcow/webmail)"
+    echo "6.4 Manage Upstream: Mark DOWN/UP server"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -439,6 +440,10 @@ menu_nginx() {
         ;;
       3|6.3)
         bash "$SCRIPT_DIR/update_nginx_mail_config.sh"
+        pause
+        ;;
+      4|6.4)
+        bash "$SCRIPT_DIR/manage_nginx_upstream.sh"
         pause
         ;;
       0)

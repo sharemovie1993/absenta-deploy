@@ -75,9 +75,9 @@ if [ "$NGINX_MODE" = "1" ] || [ "$NGINX_MODE" = "2" ]; then
     HOST=${HOST:-127.0.0.1}
     read -p "Backend #$i port (default ${BACKEND_PORT_DEFAULT}): " PORT
     PORT=${PORT:-$BACKEND_PORT_DEFAULT}
-    BACKEND_UPSTREAM_SERVERS="${BACKEND_UPSTREAM_SERVERS}    server ${HOST}:${PORT};"$'\n'
+    BACKEND_UPSTREAM_SERVERS="${BACKEND_UPSTREAM_SERVERS}    server ${HOST}:${PORT} max_fails=3 fail_timeout=30s;"$'\n'
     if [ "$NGINX_MODE" = "1" ]; then
-      FRONTEND_UPSTREAM_SERVERS="${FRONTEND_UPSTREAM_SERVERS}    server ${HOST}:${FRONTEND_PORT};"$'\n'
+      FRONTEND_UPSTREAM_SERVERS="${FRONTEND_UPSTREAM_SERVERS}    server ${HOST}:${FRONTEND_PORT} max_fails=3 fail_timeout=30s;"$'\n'
     fi
     i=$((i + 1))
   done
@@ -85,10 +85,14 @@ if [ "$NGINX_MODE" = "1" ] || [ "$NGINX_MODE" = "2" ]; then
   if [ "$NGINX_MODE" = "1" ]; then
     cat > "$NGINX_CONF" <<EOF
 upstream absenta_backend_upstream {
+  least_conn;
 ${BACKEND_UPSTREAM_SERVERS}}
+  keepalive 64;
 
 upstream absenta_frontend_upstream {
+  least_conn;
 ${FRONTEND_UPSTREAM_SERVERS}}
+  keepalive 64;
 
 server {
   listen 80;
@@ -136,6 +140,10 @@ server {
     proxy_http_version 1.1;
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection "upgrade";
+    proxy_connect_timeout 5s;
+    proxy_send_timeout 30s;
+    proxy_read_timeout 60s;
+    proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;
   }
 }
 
@@ -211,6 +219,10 @@ server {
     proxy_http_version 1.1;
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection "upgrade";
+    proxy_connect_timeout 5s;
+    proxy_send_timeout 30s;
+    proxy_read_timeout 60s;
+    proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;
   }
 
   location /socket.io/ {
@@ -223,6 +235,9 @@ server {
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 300s;
+    proxy_next_upstream error timeout http_502 http_503 http_504;
   }
 
   location = /sw.js {
@@ -269,6 +284,10 @@ server {
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_connect_timeout 5s;
+    proxy_send_timeout 30s;
+    proxy_read_timeout 60s;
+    proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;
   }
 }
 EOF
@@ -278,7 +297,9 @@ EOF
 
     cat > "$NGINX_CONF" <<EOF
 upstream absenta_backend_upstream {
+  least_conn;
 ${BACKEND_UPSTREAM_SERVERS}}
+  keepalive 64;
 
 server {
   listen 80;
@@ -326,6 +347,10 @@ server {
     proxy_http_version 1.1;
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection "upgrade";
+    proxy_connect_timeout 5s;
+    proxy_send_timeout 30s;
+    proxy_read_timeout 60s;
+    proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;
   }
 }
 
@@ -402,6 +427,10 @@ server {
     proxy_http_version 1.1;
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection "upgrade";
+    proxy_connect_timeout 5s;
+    proxy_send_timeout 30s;
+    proxy_read_timeout 60s;
+    proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;
   }
 
   location /socket.io/ {
@@ -414,6 +443,9 @@ server {
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 300s;
+    proxy_next_upstream error timeout http_502 http_503 http_504;
   }
 
   location = /sw.js {
