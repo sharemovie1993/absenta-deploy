@@ -1506,6 +1506,107 @@ menu_packages() {
   done
 }
 
+menu_git_ssh() {
+  while true; do
+    clear
+    echo "=== Persiapan Koneksi SSH ke Git ==="
+    echo "1. Generate SSH key (ed25519)"
+    echo "2. Tampilkan public key"
+    echo "3. Tambahkan known_hosts (GitHub/GitLab)"
+    echo "4. Tes koneksi SSH ke Git (GitHub/GitLab)"
+    echo "5. Set git config global (user.name & user.email)"
+    echo "0. Kembali"
+    read -p "Pilih: " choice
+    case "$choice" in
+      1)
+        if ! command -v ssh-keygen >/dev/null 2>&1; then
+          echo "openssh-client tidak ditemukan. Menginstall..."
+          if command -v apt-get >/dev/null 2>&1; then
+            apt-get update -y && apt-get install -y openssh-client || echo "Install openssh-client gagal."
+          else
+            echo "apt-get tidak tersedia. Install openssh-client manual."
+          fi
+        fi
+        read -p "Lokasi key (default /root/.ssh/id_ed25519): " KEY_PATH
+        KEY_PATH=${KEY_PATH:-/root/.ssh/id_ed25519}
+        read -p "Komentar key (mis. admin@absenta): " KEY_COMMENT
+        mkdir -p "$(dirname "$KEY_PATH")" || true
+        if [ -f "$KEY_PATH" ]; then
+          echo "Key $KEY_PATH sudah ada. Melewati generate."
+        else
+          ssh-keygen -t ed25519 -C "${KEY_COMMENT}" -f "$KEY_PATH" -N "" || echo "Generate key gagal."
+        fi
+        pause
+        ;;
+      2)
+        read -p "Lokasi key (default /root/.ssh/id_ed25519.pub): " PUB_PATH
+        PUB_PATH=${PUB_PATH:-/root/.ssh/id_ed25519.pub}
+        if [ -f "$PUB_PATH" ]; then
+          echo "=== Public Key ==="
+          cat "$PUB_PATH"
+          echo "=================="
+          echo "Salin public key ini ke pengaturan SSH Keys pada Git provider Anda."
+        else
+          echo "File $PUB_PATH tidak ditemukan."
+        fi
+        pause
+        ;;
+      3)
+        mkdir -p /root/.ssh || true
+        touch /root/.ssh/known_hosts || true
+        if command -v ssh-keyscan >/dev/null 2>&1; then
+          echo "Menambahkan github.com ke known_hosts..."
+          ssh-keyscan -H github.com >> /root/.ssh/known_hosts 2>/dev/null || true
+          echo "Menambahkan gitlab.com ke known_hosts..."
+          ssh-keyscan -H gitlab.com >> /root/.ssh/known_hosts 2>/dev/null || true
+          echo "Selesai menambahkan known_hosts."
+        else
+          echo "ssh-keyscan tidak tersedia."
+        fi
+        pause
+        ;;
+      4)
+        echo "Pilih provider untuk tes:"
+        echo "1) GitHub"
+        echo "2) GitLab"
+        read -p "Provider (1/2): " PROV
+        case "$PROV" in
+          1)
+            ssh -T git@github.com || echo "Tes koneksi GitHub gagal (normal jika belum menambahkan public key)."
+            ;;
+          2)
+            ssh -T git@gitlab.com || echo "Tes koneksi GitLab gagal (normal jika belum menambahkan public key)."
+            ;;
+          *)
+            echo "Pilihan tidak dikenal."
+            ;;
+        esac
+        pause
+        ;;
+      5)
+        read -p "git user.name: " GUSER
+        read -p "git user.email: " GEMAIL
+        if [ -n "$GUSER" ]; then
+          git config --global user.name "$GUSER" || echo "Set user.name gagal."
+        fi
+        if [ -n "$GEMAIL" ]; then
+          git config --global user.email "$GEMAIL" || echo "Set user.email gagal."
+        fi
+        echo "Konfigurasi git global:"
+        git config --global --list || true
+        pause
+        ;;
+      0)
+        break
+        ;;
+      *)
+        echo "Pilihan tidak dikenal"
+        pause
+        ;;
+    esac
+  done
+}
+
 menu_mail_server() {
   while true; do
     clear
@@ -1574,6 +1675,7 @@ menu_deploy() {
     echo "9. PostgreSQL"
     echo "10. Mail Server (Menu)"
     echo "11. Manajemen Paket"
+    echo "12. Persiapan SSH ke Git"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -1612,6 +1714,9 @@ menu_deploy() {
         ;;
       11)
         menu_packages
+        ;;
+      12)
+        menu_git_ssh
         ;;
       0)
         break
