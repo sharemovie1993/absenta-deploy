@@ -116,6 +116,56 @@ auto_mark_down() {
   fi
 }
 
+add_server() {
+  local UPN="$1"
+  local HOST="$2"
+  local PORT="$3"
+  if [ -z "$UPN" ] || [ -z "$HOST" ] || [ -z "$PORT" ]; then
+    echo "Usage: add <UPSTREAM_NAME> <HOST> <PORT>"
+    return 1
+  fi
+  if ! grep -E "^[[:space:]]*upstream[[:space:]]+${UPN}[[:space:]]*\\{" -q "$NGINX_CONF"; then
+    echo "Upstream '${UPN}' tidak ditemukan di $NGINX_CONF"
+    return 1
+  fi
+  if awk -v u="$UPN" -v h="$HOST" -v p="$PORT" '
+    /^\s*upstream[[:space:]]+[^{]+{/ {
+      if (match($0, /upstream[[:space:]]+([^ \t{]+)/, m)) {
+        upstream=m[1]; in_upstream=(upstream==u);
+      }
+      next
+    }
+    in_upstream && /}/ { in_upstream=0; next }
+    in_upstream && $0 ~ ("server[[:space:]]+" h ":" p) { found=1 }
+    END { exit found?0:1 }
+  ' "$NGINX_CONF"; then
+    echo "Server ${HOST}:${PORT} sudah ada di upstream ${UPN}."
+    return 0
+  fi
+  backup_conf
+  sed -E -i "/upstream[[:space:]]+${UPN}[[:space:]]*\\{/,/\\}/{/\\}/{i\\    server ${HOST}:${PORT};}" "$NGINX_CONF"
+  nginx -t && systemctl reload nginx
+  echo "Menambahkan server ${HOST}:${PORT} ke upstream ${UPN}."
+}
+
+remove_server() {
+  local UPN="$1"
+  local HOST="$2"
+  local PORT="$3"
+  if [ -z "$UPN" ] || [ -z "$HOST" ] || [ -z "$PORT" ]; then
+    echo "Usage: remove <UPSTREAM_NAME> <HOST> <PORT>"
+    return 1
+  fi
+  if ! grep -E "^[[:space:]]*upstream[[:space:]]+${UPN}[[:space:]]*\\{" -q "$NGINX_CONF"; then
+    echo "Upstream '${UPN}' tidak ditemukan di $NGINX_CONF"
+    return 1
+  fi
+  backup_conf
+  sed -E -i "/upstream[[:space:]]+${UPN}[[:space:]]*\\{/,/\\}/{/server[[:space:]]+${HOST}:${PORT}([[:space:]]+down)?[[:space:]]*;/d}" "$NGINX_CONF"
+  nginx -t && systemctl reload nginx
+  echo "Menghapus server ${HOST}:${PORT} dari upstream ${UPN}."
+}
+
 interactive_menu() {
   while true; do
     clear
@@ -124,6 +174,8 @@ interactive_menu() {
     echo "2) Mark UP upstream server"
     echo "3) Lihat server yang sedang DOWN"
     echo "4) Auto-detect & Mark DOWN (semua/berdasar upstream)"
+    echo "5) Tambah server ke upstream"
+    echo "6) Hapus server dari upstream"
     echo "0) Kembali"
     read -p "Pilih: " CH
     case "$CH" in
@@ -148,6 +200,20 @@ interactive_menu() {
         auto_mark_down "$UPN"
         read -p "Tekan Enter untuk lanjut..."
         ;;
+      5)
+        read -p "Nama upstream: " UPN
+        read -p "Host upstream (contoh 10.50.0.2): " HOST
+        read -p "Port upstream (contoh 3000 atau 8080): " PORT
+        add_server "$UPN" "$HOST" "$PORT"
+        read -p "Tekan Enter untuk lanjut..."
+        ;;
+      6)
+        read -p "Nama upstream: " UPN
+        read -p "Host upstream (contoh 10.50.0.2): " HOST
+        read -p "Port upstream (contoh 3000 atau 8080): " PORT
+        remove_server "$UPN" "$HOST" "$PORT"
+        read -p "Tekan Enter untuk lanjut..."
+        ;;
       0)
         break
         ;;
@@ -167,6 +233,10 @@ elif [ "$1" = "list-down" ] || [ "$1" = "list" ]; then
   list_down
 elif [ "$1" = "auto" ] || [ "$1" = "auto-mark-down" ]; then
   auto_mark_down "$2"
+elif [ "$1" = "add" ]; then
+  add_server "$2" "$3" "$4"
+elif [ "$1" = "remove" ]; then
+  remove_server "$2" "$3" "$4"
 else
   interactive_menu
 fi
