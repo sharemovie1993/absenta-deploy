@@ -46,7 +46,9 @@ mkdir -p "$APP_ROOT"
 
 if [ ! -d "$BACKEND_DIR/.git" ]; then
   echo "Repository backend belum ada."
-  read -p "Masukkan URL repository backend (https): " BACKEND_REPO_URL
+  DEFAULT_BACKEND_REPO_URL="${DEFAULT_BACKEND_REPO_URL:-git@github.com:sharemovie1993/absenta_backend.git}"
+  read -p "Masukkan URL repository backend [default: $DEFAULT_BACKEND_REPO_URL]: " BACKEND_REPO_URL
+  BACKEND_REPO_URL=${BACKEND_REPO_URL:-$DEFAULT_BACKEND_REPO_URL}
   if [ -z "$BACKEND_REPO_URL" ]; then
     echo "URL repository backend wajib diisi."
     exit 1

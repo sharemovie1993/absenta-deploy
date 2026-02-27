@@ -49,7 +49,9 @@ mkdir -p "$APP_ROOT"
 
 if [ ! -d "$FRONTEND_DIR/.git" ]; then
   echo "Repository frontend belum ada."
-  read -p "Masukkan URL repository frontend (https): " FRONTEND_REPO_URL
+  DEFAULT_FRONTEND_REPO_URL="${DEFAULT_FRONTEND_REPO_URL:-git@github.com:sharemovie1993/absenta_frontend.git}"
+  read -p "Masukkan URL repository frontend [default: $DEFAULT_FRONTEND_REPO_URL]: " FRONTEND_REPO_URL
+  FRONTEND_REPO_URL=${FRONTEND_REPO_URL:-$DEFAULT_FRONTEND_REPO_URL}
   if [ -z "$FRONTEND_REPO_URL" ]; then
     echo "URL repository frontend wajib diisi."
     exit 1
