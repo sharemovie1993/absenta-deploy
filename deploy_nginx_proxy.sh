@@ -86,13 +86,15 @@ if [ "$NGINX_MODE" = "1" ] || [ "$NGINX_MODE" = "2" ]; then
     cat > "$NGINX_CONF" <<EOF
 upstream absenta_backend_upstream {
   least_conn;
-${BACKEND_UPSTREAM_SERVERS}}
+${BACKEND_UPSTREAM_SERVERS}
   keepalive 64;
+}
 
 upstream absenta_frontend_upstream {
   least_conn;
-${FRONTEND_UPSTREAM_SERVERS}}
+${FRONTEND_UPSTREAM_SERVERS}
   keepalive 64;
+}
 
 server {
   listen 80;
@@ -298,8 +300,9 @@ EOF
     cat > "$NGINX_CONF" <<EOF
 upstream absenta_backend_upstream {
   least_conn;
-${BACKEND_UPSTREAM_SERVERS}}
+${BACKEND_UPSTREAM_SERVERS}
   keepalive 64;
+}
 
 server {
   listen 80;
