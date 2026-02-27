@@ -171,6 +171,64 @@ remove_server() {
   echo "Menghapus server ${HOST}:${PORT} dari upstream ${UPN}."
 }
 
+list_upstreams() {
+  awk '
+    /^\s*upstream[[:space:]]+[^{]+{/ {
+      if (match($0, /upstream[[:space:]]+([^ \t{]+)/, m)) {
+        print m[1]
+      }
+    }
+  ' "$NGINX_CONF"
+}
+
+detect_upstream_for_host_port() {
+  local HOST="$1"
+  local PORT="$2"
+  awk -v h="$HOST" -v p="$PORT" '
+    /^\s*upstream[[:space:]]+[^{]+{/ {
+      if (match($0, /upstream[[:space:]]+([^ \t{]+)/, m)) {
+        upstream=m[1]; in_upstream=1;
+      }
+      next
+    }
+    in_upstream && /}/ { in_upstream=0; next }
+    in_upstream && $0 ~ ("server[[:space:]]+" h ":" p) {
+      print upstream
+    }
+  ' "$NGINX_CONF" | head -n1
+}
+
+choose_upstream_interactive() {
+  local options
+  options="$(list_upstreams)"
+  local count=0
+  local selected=""
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    count=$((count+1))
+    echo "$count) $name"
+  done <<<"$options"
+  if [ "$count" -eq 0 ]; then
+    echo ""
+    echo "Tidak ada upstream terdeteksi di konfigurasi."
+    return 1
+  elif [ "$count" -eq 1 ]; then
+    selected="$(printf "%s" "$options" | head -n1)"
+    printf "%s" "$selected"
+    return 0
+  else
+    read -p "Pilih upstream (angka): " idx
+    if [ -n "$idx" ]; then
+      selected="$(printf "%s" "$options" | sed -n "${idx}p")"
+      if [ -n "$selected" ]; then
+        printf "%s" "$selected"
+        return 0
+      fi
+    fi
+    return 1
+  fi
+}
+
 auto_remove_down_or_unreachable() {
   local TARGET_UPSTREAM="$1"
   backup_conf
@@ -251,16 +309,40 @@ interactive_menu() {
         read -p "Tekan Enter untuk lanjut..."
         ;;
       5)
-        read -p "Nama upstream: " UPN
+        read -p "Nama upstream (kosongkan untuk auto): " UPN
         read -p "Host upstream (contoh 10.50.0.2): " HOST
         read -p "Port upstream (contoh 3000 atau 8080): " PORT
+        if [ -z "$UPN" ]; then
+          echo "Mendeteksi upstream..."
+          UPN_DET="$(choose_upstream_interactive || true)"
+          UPN="${UPN_DET:-$UPN}"
+          if [ -z "$UPN" ]; then
+            echo "Gagal menentukan upstream secara otomatis."
+            read -p "Tekan Enter untuk lanjut..."
+            continue
+          fi
+        fi
         add_server "$UPN" "$HOST" "$PORT"
         read -p "Tekan Enter untuk lanjut..."
         ;;
       6)
-        read -p "Nama upstream: " UPN
+        read -p "Nama upstream (kosongkan untuk auto): " UPN
         read -p "Host upstream (contoh 10.50.0.2): " HOST
         read -p "Port upstream (contoh 3000 atau 8080): " PORT
+        if [ -z "$UPN" ]; then
+          UPN_DET="$(detect_upstream_for_host_port "$HOST" "$PORT")"
+          if [ -z "$UPN_DET" ]; then
+            echo "Tidak menemukan upstream untuk ${HOST}:${PORT}."
+            echo "Silakan pilih upstream secara manual."
+            UPN_DET="$(choose_upstream_interactive || true)"
+          fi
+          UPN="${UPN_DET:-$UPN}"
+          if [ -z "$UPN" ]; then
+            echo "Gagal menentukan upstream secara otomatis."
+            read -p "Tekan Enter untuk lanjut..."
+            continue
+          fi
+        fi
         remove_server "$UPN" "$HOST" "$PORT"
         read -p "Tekan Enter untuk lanjut..."
         ;;
