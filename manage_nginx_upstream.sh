@@ -45,12 +45,38 @@ mark_up() {
   echo "Mengembalikan upstream ${HOST}:${PORT} ke status up."
 }
 
+list_down() {
+  echo "=== Daftar server upstream yang sedang DOWN ==="
+  awk '
+    /^\s*upstream[[:space:]]+[^{]+{/ {
+      if (match($0, /upstream[[:space:]]+([^ \t{]+)/, m)) {
+        upstream=m[1]; in_upstream=1;
+      }
+      next
+    }
+    in_upstream && /}/ { in_upstream=0; upstream=""; next }
+    in_upstream && /server[[:space:]]+[0-9A-Za-z\.\-:]+/ {
+      if ($0 ~ /down[[:space:]]*;/) {
+        gsub(/^[ \t]+|[ \t]+$/, "", $0);
+        print upstream " | " $0
+        found=1
+      }
+    }
+    END {
+      if (!found) {
+        print "Tidak ada server yang ditandai DOWN di konfigurasi."
+      }
+    }
+  ' "$NGINX_CONF"
+}
+
 interactive_menu() {
   while true; do
     clear
     echo "=== Manage Nginx Upstream (Mark down/up) ==="
     echo "1) Mark DOWN upstream server"
     echo "2) Mark UP upstream server"
+    echo "3) Lihat server yang sedang DOWN"
     echo "0) Kembali"
     read -p "Pilih: " CH
     case "$CH" in
@@ -64,6 +90,10 @@ interactive_menu() {
         read -p "Host upstream (contoh 10.50.0.2): " HOST
         read -p "Port upstream (contoh 3000 atau 8080): " PORT
         mark_up "$HOST" "$PORT"
+        read -p "Tekan Enter untuk lanjut..."
+        ;;
+      3)
+        list_down
         read -p "Tekan Enter untuk lanjut..."
         ;;
       0)
@@ -81,7 +111,8 @@ if [ "$1" = "down" ]; then
   mark_down "$2" "$3"
 elif [ "$1" = "up" ]; then
   mark_up "$2" "$3"
+elif [ "$1" = "list-down" ] || [ "$1" = "list" ]; then
+  list_down
 else
   interactive_menu
 fi
-
