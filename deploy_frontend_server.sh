@@ -16,9 +16,21 @@ apt upgrade -y
 echo "Menginstall paket dasar..."
 apt install -y curl git build-essential nginx
 
-echo "Memeriksa Node.js 18..."
-if ! command -v node >/dev/null 2>&1; then
-  curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+NODE_VERSION_MAJOR="${NODE_VERSION_MAJOR:-24}"
+echo "Memeriksa Node.js ${NODE_VERSION_MAJOR}.x..."
+if command -v node >/dev/null 2>&1; then
+  CURRENT_NODE="$(node -v 2>/dev/null | sed 's/^v//')"
+  CURRENT_MAJOR="$(printf "%s" "$CURRENT_NODE" | cut -d. -f1)"
+  if [ "$CURRENT_MAJOR" != "$NODE_VERSION_MAJOR" ]; then
+    echo "Versi Node saat ini $CURRENT_NODE, menginstall Node ${NODE_VERSION_MAJOR}.x..."
+    curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION_MAJOR}.x" | bash -
+    apt install -y nodejs
+  else
+    echo "Node.js sudah versi ${NODE_VERSION_MAJOR}.x"
+  fi
+else
+  echo "Node.js belum terpasang, menginstall Node ${NODE_VERSION_MAJOR}.x..."
+  curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION_MAJOR}.x" | bash -
   apt install -y nodejs
 fi
 
