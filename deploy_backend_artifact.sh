@@ -129,6 +129,16 @@ ssh -o StrictHostKeyChecking=no "${VM2_USER}@${VM2_HOST}" bash -c "'
       pm2 reload absenta-backend || true
     fi
     pm2 save || true
+    # Verifikasi status proses PM2 (backend harus online)
+    if pm2 list | grep -E "absenta-backend" | grep -qi "online"; then
+      echo "PM2 absenta-backend online di VM2."
+    else
+      echo "PERINGATAN: PM2 absenta-backend tidak terlihat 'online'. Periksa log PM2."
+      pm2 logs absenta-backend --lines 20 || true
+    fi
+  fi
+  if command -v nginx >/dev/null 2>&1; then
+    nginx -t && systemctl reload nginx || true
   fi
 '"
 

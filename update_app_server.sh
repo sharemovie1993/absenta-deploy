@@ -234,6 +234,20 @@ if [ -n "$VM2_HOST" ]; then
     if command -v pm2 >/dev/null 2>&1; then
       pm2 restart all || true
       pm2 save || true
+      # Verifikasi status proses PM2 (frontend harus online)
+      if pm2 list | grep -E "absenta-frontend" | grep -qi "online"; then
+        echo "PM2 absenta-frontend online di VM2."
+      else
+        echo "PM2 absenta-frontend belum online, mencoba start..."
+        pm2 start "serve -s dist -l 8080" --name absenta-frontend || true
+        pm2 save || true
+        if pm2 list | grep -E "absenta-frontend" | grep -qi "online"; then
+          echo "PM2 absenta-frontend berhasil online."
+        else
+          echo "PERINGATAN: PM2 absenta-frontend tidak terlihat 'online'. Periksa log PM2."
+          pm2 logs absenta-frontend --lines 20 || true
+        fi
+      fi
     fi
   '"
 fi
