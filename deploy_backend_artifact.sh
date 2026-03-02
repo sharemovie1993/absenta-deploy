@@ -65,6 +65,18 @@ else
 fi
 
 echo "Step 4 – Extract dan reload di VM2"
+read -p "Salin .env backend ke VM2? (y/N): " COPY_ENV_INPUT
+COPY_ENV="${COPY_ENV_INPUT:-N}"
+if [ "$COPY_ENV" = "y" ] || [ "$COPY_ENV" = "Y" ]; then
+  if [ -f "$BACKEND_DIR/.env" ]; then
+    scp -o StrictHostKeyChecking=no "$BACKEND_DIR/.env" "${VM2_USER}@${VM2_HOST}:${VM2_PATH}/.env"
+    SVC_PATH="$(grep -E '^FIREBASE_SERVICE_ACCOUNT_PATH=' "$BACKEND_DIR/.env" | sed 's/^FIREBASE_SERVICE_ACCOUNT_PATH=//; s/\"//g')"
+    if [ -n "$SVC_PATH" ] && [ -f "$SVC_PATH" ]; then
+      ssh -o StrictHostKeyChecking=no "${VM2_USER}@${VM2_HOST}" "mkdir -p \"$(dirname "$SVC_PATH")\""
+      scp -o StrictHostKeyChecking=no "$SVC_PATH" "${VM2_USER}@${VM2_HOST}:$SVC_PATH"
+    fi
+  fi
+fi
 ssh -o StrictHostKeyChecking=no "${VM2_USER}@${VM2_HOST}" bash -c "'
   set -e
   cd \"${VM2_PATH}\"
@@ -112,14 +124,20 @@ ssh -o StrictHostKeyChecking=no "${VM2_USER}@${VM2_HOST}" bash -c "'
     if command -v npm >/dev/null 2>&1; then
       npm ci --omit=dev || npm install --omit=dev
     fi
-    if command -v npx >/dev/null 2>&1; then
-      npx prisma generate || true
-    fi
+  fi
+  # Safety: selalu generate Prisma client setelah swap dist
+  if command -v npx >/dev/null 2>&1; then
+    npx prisma generate || true
+  fi
+  # Safety: pastikan .env ada
+  if [ ! -f .env ]; then
+    echo \".env backend tidak ditemukan di ${VM2_PATH}. Deploy dibatalkan.\"
+    exit 1
   fi
   if command -v pm2 >/dev/null 2>&1; then
     ROLLBACK=false
     if pm2 list | grep -q \"absenta-backend\"; then
-      pm2 reload absenta-backend || ROLLBACK=true
+      pm2 reload absenta-backend || pm2 restart absenta-backend || ROLLBACK=true
     else
       pm2 start dist/main.js --name absenta-backend --node-args \"-r tsconfig-paths/register\" || ROLLBACK=true
     fi

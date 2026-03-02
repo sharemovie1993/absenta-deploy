@@ -121,6 +121,18 @@ if [ -n "$VM2_BACKEND_HOST" ]; then
     LOCAL_LOCK_HASH="$(sha256sum package-lock.json | awk '{print $1}')"
   fi
   scp -o StrictHostKeyChecking=no "$BACKEND_ARTIFACT" "${VM2_BACKEND_USER}@${VM2_BACKEND_HOST}:${VM2_BACKEND_PATH}/"
+  read -p "Salin .env backend ke VM2? (y/N): " COPY_ENV_INPUT
+  COPY_ENV="${COPY_ENV_INPUT:-N}"
+  if [ "$COPY_ENV" = "y" ] || [ "$COPY_ENV" = "Y" ]; then
+    if [ -f "$BACKEND_DIR/.env" ]; then
+      scp -o StrictHostKeyChecking=no "$BACKEND_DIR/.env" "${VM2_BACKEND_USER}@${VM2_BACKEND_HOST}:${VM2_BACKEND_PATH}/.env"
+      SVC_PATH="$(grep -E '^FIREBASE_SERVICE_ACCOUNT_PATH=' "$BACKEND_DIR/.env" | sed 's/^FIREBASE_SERVICE_ACCOUNT_PATH=//; s/\"//g')"
+      if [ -n "$SVC_PATH" ] && [ -f "$SVC_PATH" ]; then
+        ssh -o StrictHostKeyChecking=no "${VM2_BACKEND_USER}@${VM2_BACKEND_HOST}" "mkdir -p \"$(dirname "$SVC_PATH")\""
+        scp -o StrictHostKeyChecking=no "$SVC_PATH" "${VM2_BACKEND_USER}@${VM2_BACKEND_HOST}:$SVC_PATH"
+      fi
+    fi
+  fi
   ssh -o StrictHostKeyChecking=no "${VM2_BACKEND_USER}@${VM2_BACKEND_HOST}" bash -c "'
     set -e
     cd \"${VM2_BACKEND_PATH}\"
@@ -165,18 +177,22 @@ if [ -n "$VM2_BACKEND_HOST" ]; then
         NEED_INSTALL=true
       fi
     fi
-    if [ \"\$NEED_INSTALL\" = true ]; then
-      if command -v npm >/dev/null 2>&1; then
-        npm ci --omit=dev || npm install --omit=dev
-      fi
-      if command -v npx >/dev/null 2>&1; then
-        npx prisma generate || true
-      fi
+    if [ \"\$NEED_INSTALL\" = true ] && command -v npm >/dev/null 2>&1; then
+      npm ci --omit=dev || npm install --omit=dev
+    fi
+    # Safety: selalu generate Prisma client setelah swap dist
+    if command -v npx >/dev/null 2>&1; then
+      npx prisma generate || true
+    fi
+    # Safety: pastikan .env ada
+    if [ ! -f .env ]; then
+      echo \".env backend tidak ditemukan di ${VM2_BACKEND_PATH}. Deploy dibatalkan.\"
+      exit 1
     fi
     if command -v pm2 >/dev/null 2>&1; then
       ROLLBACK=false
       if pm2 list | grep -q \"absenta-backend\"; then
-        pm2 reload absenta-backend || ROLLBACK=true
+        pm2 reload absenta-backend || pm2 restart absenta-backend || ROLLBACK=true
       else
         pm2 start dist/main.js --name absenta-backend --node-args \"-r tsconfig-paths/register\" || ROLLBACK=true
       fi
@@ -186,6 +202,15 @@ if [ -n "$VM2_BACKEND_HOST" ]; then
         pm2 reload absenta-backend || true
       fi
       pm2 save || true
+      if pm2 list | grep -E \"absenta-backend\" | grep -qi \"online\"; then
+        echo \"PM2 absenta-backend online di VM2.\"
+      else
+        echo \"PERINGATAN: PM2 absenta-backend tidak terlihat 'online'. Periksa log PM2.\"
+        pm2 logs absenta-backend --lines 20 || true
+      fi
+    fi
+    if command -v nginx >/dev/null 2>&1; then
+      nginx -t && systemctl reload nginx || true
     fi
   '"
 fi

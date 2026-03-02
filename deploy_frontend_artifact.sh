@@ -64,6 +64,13 @@ else
 fi
 
 echo "Step 4 – Extract dan restart di VM2"
+read -p "Salin .env frontend ke VM2? (y/N): " COPY_FE_ENV_INPUT
+COPY_FE_ENV="${COPY_FE_ENV_INPUT:-N}"
+if [ "$COPY_FE_ENV" = "y" ] || [ "$COPY_FE_ENV" = "Y" ]; then
+  if [ -f "$FRONTEND_DIR/.env" ]; then
+    scp -o StrictHostKeyChecking=no "$FRONTEND_DIR/.env" "${VM2_USER}@${VM2_HOST}:${VM2_PATH}/.env"
+  fi
+fi
 ssh -o StrictHostKeyChecking=no "${VM2_USER}@${VM2_HOST}" bash -c "'
   set -e
   cd \"${VM2_PATH}\"
