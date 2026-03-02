@@ -68,8 +68,27 @@ echo "Step 4 – Extract dan reload di VM2"
 ssh -o StrictHostKeyChecking=no "${VM2_USER}@${VM2_HOST}" bash -c "'
   set -e
   cd \"${VM2_PATH}\"
-  rm -rf dist
-  tar -xzf \"${ARTIFACT_NAME}\"
+  # Safety: cek ruang disk minimal 100MB
+  FREE_MB=\$(df -Pm \"${VM2_PATH}\" | tail -1 | tr -s \" \" | cut -d\" \" -f4)
+  if [ \"\${FREE_MB}\" -lt 100 ]; then
+    echo \"Ruang disk kurang dari 100MB, batalkan deploy.\"
+    exit 1
+  fi
+  TS=\$(date +%Y%m%d%H%M%S)
+  rm -rf release_tmp
+  mkdir -p release_tmp
+  tar -xzf \"${ARTIFACT_NAME}\" -C release_tmp
+  # Validasi artifact
+  if [ ! -d release_tmp/dist ]; then
+    echo \"Artifact tidak berisi folder dist, batalkan.\"
+    exit 1
+  fi
+  # Backup dan swap atomik
+  if [ -d dist ]; then
+    mv dist \"dist.bak_\${TS}\" || true
+  fi
+  mv release_tmp/dist dist
+  rm -rf release_tmp
   rm -f \"${ARTIFACT_NAME}\"
   # Sinkronisasi dependency bila lock berubah atau node_modules belum ada
   NEED_INSTALL=false
@@ -98,10 +117,16 @@ ssh -o StrictHostKeyChecking=no "${VM2_USER}@${VM2_HOST}" bash -c "'
     fi
   fi
   if command -v pm2 >/dev/null 2>&1; then
+    ROLLBACK=false
     if pm2 list | grep -q \"absenta-backend\"; then
-      pm2 reload absenta-backend || true
+      pm2 reload absenta-backend || ROLLBACK=true
     else
-      pm2 start dist/main.js --name absenta-backend --node-args \"-r tsconfig-paths/register\" || true
+      pm2 start dist/main.js --name absenta-backend --node-args \"-r tsconfig-paths/register\" || ROLLBACK=true
+    fi
+    if [ \"\$ROLLBACK\" = true ] && [ -d \"dist.bak_\${TS}\" ]; then
+      echo \"Reload gagal, rollback ke backup sebelumnya...\"
+      rm -rf dist && mv \"dist.bak_\${TS}\" dist
+      pm2 reload absenta-backend || true
     fi
     pm2 save || true
   fi

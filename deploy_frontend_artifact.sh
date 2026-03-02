@@ -67,8 +67,31 @@ echo "Step 4 – Extract dan restart di VM2"
 ssh -o StrictHostKeyChecking=no "${VM2_USER}@${VM2_HOST}" bash -c "'
   set -e
   cd \"${VM2_PATH}\"
-  rm -rf dist
-  tar -xzf \"${ARTIFACT_NAME}\"
+  # Safety: cek ruang disk minimal 100MB
+  FREE_MB=\$(df -Pm \"${VM2_PATH}\" | tail -1 | tr -s \" \" | cut -d\" \" -f4)
+  if [ \"\${FREE_MB}\" -lt 100 ]; then
+    echo \"Ruang disk kurang dari 100MB, batalkan deploy.\"
+    exit 1
+  fi
+  TS=\$(date +%Y%m%d%H%M%S)
+  rm -rf release_tmp
+  mkdir -p release_tmp
+  tar -xzf \"${ARTIFACT_NAME}\" -C release_tmp
+  # Validasi artifact
+  if [ ! -f release_tmp/dist/index.html ]; then
+    echo \"Artifact tidak berisi dist/index.html, batalkan.\"
+    exit 1
+  fi
+  if ! ls release_tmp/dist/assets/*.js >/dev/null 2>&1; then
+    echo \"Folder assets tidak berisi bundle .js, batalkan.\"
+    exit 1
+  fi
+  # Backup dan swap atomik
+  if [ -d dist ]; then
+    mv dist \"dist.bak_\${TS}\" || true
+  fi
+  mv release_tmp/dist dist
+  rm -rf release_tmp
   rm -f \"${ARTIFACT_NAME}\"
   if command -v pm2 >/dev/null 2>&1; then
     pm2 restart all || true
