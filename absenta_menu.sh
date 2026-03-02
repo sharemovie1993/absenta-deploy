@@ -1673,6 +1673,7 @@ menu_deploy() {
     echo "2. Backend Only"
     echo "3. Frontend Only"
     echo "13. Deploy Frontend Artifact (VM1→VM2)"
+    echo "14. Deploy Backend Artifact (VM1→VM2)"
     echo "4. Worker"
     echo "5. Nginx Reverse Proxy"
     echo "6. SSH Server"
@@ -1698,6 +1699,10 @@ menu_deploy() {
         ;;
       13)
         bash "$SCRIPT_DIR/deploy_frontend_artifact.sh"
+        pause
+        ;;
+      14)
+        bash "$SCRIPT_DIR/deploy_backend_artifact.sh"
         pause
         ;;
       4)
