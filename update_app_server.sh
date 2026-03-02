@@ -130,10 +130,10 @@ if [ -n "$VM2_BACKEND_HOST" ]; then
     # Jika package-lock.json berubah, jalankan npm ci --omit=dev dan prisma generate
     NEED_INSTALL=false
     if [ -f package-lock.json ]; then
-      REMOTE_LOCK_HASH=\$(sha256sum package-lock.json | awk \"{print \\$1}\")
+      REMOTE_LOCK_HASH=\$(sha256sum package-lock.json | cut -d\\  -f1)
       # Simpan hash lama jika ada
       if [ -f package-lock.json.prev ]; then
-        PREV_LOCK_HASH=\$(sha256sum package-lock.json.prev | awk \"{print \\$1}\")
+        PREV_LOCK_HASH=\$(sha256sum package-lock.json.prev | cut -d\\  -f1)
       else
         PREV_LOCK_HASH=\"\"
       fi
@@ -182,7 +182,7 @@ if [ -n "$VM2_HOST" ]; then
   tar -czf "$ARTIFACT_NAME" dist
   LOCAL_HASH="$(sha256sum "$ARTIFACT_NAME" | awk '{print $1}')"
   scp -o StrictHostKeyChecking=no "$ARTIFACT_NAME" "${VM2_USER}@${VM2_HOST}:${VM2_PATH}/"
-  REMOTE_HASH="$(ssh -o StrictHostKeyChecking=no ${VM2_USER}@${VM2_HOST} "cd ${VM2_PATH} && sha256sum ${ARTIFACT_NAME} | awk '{print \$1}'" || true)"
+  REMOTE_HASH="$(ssh -o StrictHostKeyChecking=no ${VM2_USER}@${VM2_HOST} "cd ${VM2_PATH} && sha256sum ${ARTIFACT_NAME} | cut -d\\  -f1" || true)"
   ssh -o StrictHostKeyChecking=no "${VM2_USER}@${VM2_HOST}" bash -c "'
     set -e
     cd \"${VM2_PATH}\"

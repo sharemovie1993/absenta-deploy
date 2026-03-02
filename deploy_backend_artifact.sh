@@ -53,7 +53,7 @@ echo "Step 3 – Kirim ke VM2"
 scp -o StrictHostKeyChecking=no "$ARTIFACT_NAME" "${VM2_USER}@${VM2_HOST}:${VM2_PATH}/"
 
 echo "Step 3.1 – Verifikasi hash di VM2"
-REMOTE_HASH="$(ssh -o StrictHostKeyChecking=no ${VM2_USER}@${VM2_HOST} "cd ${VM2_PATH} && sha256sum ${ARTIFACT_NAME} | awk '{print \$1}'" || true)"
+REMOTE_HASH="$(ssh -o StrictHostKeyChecking=no ${VM2_USER}@${VM2_HOST} "cd ${VM2_PATH} && sha256sum ${ARTIFACT_NAME} | cut -d\\  -f1" || true)"
 echo "SHA256 Artifact (VM2): $REMOTE_HASH"
 if [ -z "$REMOTE_HASH" ]; then
   echo "Gagal membaca hash di VM2"
@@ -74,9 +74,9 @@ ssh -o StrictHostKeyChecking=no "${VM2_USER}@${VM2_HOST}" bash -c "'
   # Sinkronisasi dependency bila lock berubah atau node_modules belum ada
   NEED_INSTALL=false
   if [ -f package-lock.json ]; then
-    REMOTE_LOCK_HASH=\$(sha256sum package-lock.json | awk \"{print \\$1}\")
+    REMOTE_LOCK_HASH=\$(sha256sum package-lock.json | cut -d\\  -f1)
     if [ -f package-lock.json.prev ]; then
-      PREV_LOCK_HASH=\$(sha256sum package-lock.json.prev | awk \"{print \\$1}\")
+        PREV_LOCK_HASH=\$(sha256sum package-lock.json.prev | cut -d\\  -f1)
     else
       PREV_LOCK_HASH=\"\"
     fi
