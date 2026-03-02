@@ -189,6 +189,24 @@ server {
     proxy_set_header X-Forwarded-Proto \$scheme;
   }
 
+  # Serve static assets explicitly to frontend upstream to avoid SPA fallbacks returning HTML
+  location ^~ /assets/ {
+    proxy_pass http://absenta_frontend_upstream;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+  }
+  location ~* \.(js|css|map|svg|png|jpe?g|webp|woff2?)\$ {
+    proxy_pass http://absenta_frontend_upstream;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    expires 7d;
+    add_header Cache-Control "public, max-age=604800, immutable";
+  }
+
   location /api/ {
     if (\$request_method = 'OPTIONS') {
       add_header 'Access-Control-Allow-Origin' "\$http_origin" always;
@@ -589,6 +607,24 @@ server {
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
+  }
+
+  # Serve static assets explicitly to frontend host to avoid SPA fallbacks returning HTML
+  location ^~ /assets/ {
+    proxy_pass http://${FRONTEND_HOST}:${FRONTEND_PORT};
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+  }
+  location ~* \.(js|css|map|svg|png|jpe?g|webp|woff2?)\$ {
+    proxy_pass http://${FRONTEND_HOST}:${FRONTEND_PORT};
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    expires 7d;
+    add_header Cache-Control "public, max-age=604800, immutable";
   }
 
   location /api/ {
