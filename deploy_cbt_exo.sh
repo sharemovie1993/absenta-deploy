@@ -227,6 +227,20 @@ if [ "$MAKE_SVC" = "y" ] || [ "$MAKE_SVC" = "Y" ]; then
     fi
   fi
   SVC_PATH="/etc/systemd/system/cbt-exo.service"
+  read -p "Nama service systemd (default cbt.service): " SVC_NAME
+  SVC_NAME=${SVC_NAME:-cbt.service}
+  read -p "User service (default www-data): " SVC_USER
+  SVC_USER=${SVC_USER:-www-data}
+  read -p "Group service (default www-data): " SVC_GROUP
+  SVC_GROUP=${SVC_GROUP:-www-data}
+  if ! getent group "$SVC_GROUP" >/dev/null 2>&1; then
+    groupadd -r "$SVC_GROUP" || true
+  fi
+  if ! id -u "$SVC_USER" >/dev/null 2>&1; then
+    useradd -r -s /usr/sbin/nologin -g "$SVC_GROUP" -d "$APP_ROOT" "$SVC_USER" || true
+  fi
+  chown -R "$SVC_USER":"$SVC_GROUP" "$APP_ROOT" || true
+  SVC_PATH="/etc/systemd/system/$SVC_NAME"
   cat > "$SVC_PATH" <<EOF
 [Unit]
 Description=CBT EXO Service
@@ -234,19 +248,24 @@ After=network.target postgresql.service
 
 [Service]
 Type=simple
+User=$SVC_USER
+Group=$SVC_GROUP
 WorkingDirectory=$APP_ROOT
 EnvironmentFile=$ENV_FILE
 ExecStart=$APP_ROOT/$BIN_FILE
 Restart=always
-RestartSec=3
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=cbt
 
 [Install]
 WantedBy=multi-user.target
 EOF
   systemctl daemon-reload
-  systemctl enable cbt-exo.service
-  systemctl restart cbt-exo.service || true
-  systemctl status cbt-exo.service --no-pager -l | head -n 20 || true
+  systemctl enable "$SVC_NAME"
+  systemctl restart "$SVC_NAME" || true
+  systemctl status "$SVC_NAME" --no-pager -l | head -n 20 || true
 else
   echo "Jalankan aplikasi secara manual dengan:"
   echo "$INSTALL_DIR/$BIN_FILE"
