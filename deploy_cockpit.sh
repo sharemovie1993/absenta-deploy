@@ -85,5 +85,23 @@ if [ -z "$HOST_IP" ]; then
   HOST_IP="IP-SERVER"
 fi
 
+# Verifikasi layanan & konektivitas dasar
+systemctl is-enabled cockpit.socket >/dev/null 2>&1 || systemctl enable cockpit.socket || true
+systemctl is-active cockpit.socket >/dev/null 2>&1 || systemctl start cockpit.socket || true
+
+TRIES=10
+while [ $TRIES -gt 0 ]; do
+  if command -v ss >/dev/null 2>&1 && ss -plnt 2>/dev/null | grep -q ":9090 "; then
+    break
+  fi
+  sleep 1
+  TRIES=$((TRIES-1))
+done
+
+if command -v curl >/dev/null 2>&1; then
+  curl -k -s --max-time 5 "https://127.0.0.1:9090" >/dev/null || true
+fi
+
 echo "Cockpit aktif. Akses: https://${HOST_IP}:9090"
 echo "Login menggunakan user sistem (root atau user sudo)."
+echo "Jika gagal terhubung: cek log dengan 'journalctl -u cockpit -n 50' di server."
