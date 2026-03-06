@@ -430,6 +430,7 @@ menu_nginx() {
     echo "6.5 Deploy/Update Nginx untuk CBT EXO"
     echo "6.6 Pasang SSL Let's Encrypt untuk CBT EXO"
     echo "6.7 Buat Virtual Host Baru (Umum)"
+    echo "6.8 Deploy Nginx Cockpit (443 reverse proxy)"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -459,6 +460,10 @@ menu_nginx() {
         ;;
       7|6.7)
         bash "$SCRIPT_DIR/create_nginx_vhost.sh"
+        pause
+        ;;
+      8|6.8)
+        bash "$SCRIPT_DIR/deploy_nginx_cockpit.sh"
         pause
         ;;
       0)
