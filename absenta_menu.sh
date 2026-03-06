@@ -1674,6 +1674,7 @@ menu_deploy() {
     echo "3. Frontend Only"
     echo "13. Deploy Frontend Artifact (VM1→VM2)"
     echo "14. Deploy Backend Artifact (VM1→VM2)"
+    echo "15. Deploy CBT EXO"
     echo "4. Worker"
     echo "5. Nginx Reverse Proxy"
     echo "6. SSH Server"
@@ -1703,6 +1704,10 @@ menu_deploy() {
         ;;
       14)
         bash "$SCRIPT_DIR/deploy_backend_artifact.sh"
+        pause
+        ;;
+      15)
+        bash "$SCRIPT_DIR/deploy_cbt_exo.sh"
         pause
         ;;
       4)
