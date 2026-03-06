@@ -873,11 +873,16 @@ menu_security() {
     clear
     echo "=== 8. Keamanan Server ==="
     echo "8.1 Hardening dasar server (UFW, fail2ban, SSH opsi)"
+    echo "8.2 Kelola Firewall (Tambah/Hapus/Lihat)"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
       1|8.1)
         bash "$SCRIPT_DIR/harden_server.sh"
+        pause
+        ;;
+      2|8.2)
+        bash "$SCRIPT_DIR/manage_firewall.sh"
         pause
         ;;
       0)
