@@ -74,11 +74,11 @@ server {
     listen [::]:80;
     server_name ${CBT_DOMAIN};
 
-    location / {
+    location /ws {
         proxy_pass http://cbt_exo_upstream;
         proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP \$http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For \$http_cf_connecting_ip;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
@@ -86,6 +86,23 @@ server {
         proxy_read_timeout 86400;
         proxy_send_timeout 86400;
         proxy_buffering off;
+    }
+
+    location /api {
+        proxy_pass http://cbt_exo_upstream;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For \$http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        add_header Cache-Control "no-store";
+    }
+
+    location / {
+        proxy_pass http://cbt_exo_upstream;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For \$http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
 
     access_log /var/log/nginx/cbt_exo_access.log;
