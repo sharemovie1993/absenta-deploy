@@ -428,6 +428,7 @@ menu_nginx() {
     echo "6.3 Update Konfigurasi untuk Mail (Mailcow/webmail)"
     echo "6.4 Manage Upstream: Mark DOWN/UP server"
     echo "6.5 Deploy/Update Nginx untuk CBT EXO"
+    echo "6.6 Pasang SSL Let's Encrypt untuk CBT EXO"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -449,6 +450,10 @@ menu_nginx() {
         ;;
       5|6.5)
         bash "$SCRIPT_DIR/deploy_nginx_cbt_exo.sh"
+        pause
+        ;;
+      6|6.6)
+        bash "$SCRIPT_DIR/deploy_ssl_cbt_exo.sh"
         pause
         ;;
       0)

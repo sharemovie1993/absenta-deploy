@@ -61,9 +61,10 @@ EOF
 ln -sf "$CONF_PATH" "$ENABLED_DIR/cbt-exo.conf"
 
 if command -v ufw >/dev/null 2>&1; then
-  ufw allow 'Nginx Full' || ufw allow 80/tcp || true
+  ufw allow 'Nginx Full' || { ufw allow 80/tcp || true; ufw allow 443/tcp || true; }
 elif command -v firewall-cmd >/dev/null 2>&1; then
   firewall-cmd --permanent --add-service=http || firewall-cmd --permanent --add-port=80/tcp || true
+  firewall-cmd --permanent --add-service=https || firewall-cmd --permanent --add-port=443/tcp || true
   firewall-cmd --reload || true
 fi
 
