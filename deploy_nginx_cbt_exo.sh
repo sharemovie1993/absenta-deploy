@@ -32,6 +32,17 @@ ENABLED_DIR="/etc/nginx/sites-enabled"
 mkdir -p "$CONF_DIR" "$ENABLED_DIR" || true
 CONF_PATH="$CONF_DIR/cbt-exo.conf"
 
+# Siapkan map untuk koneksi WebSocket pada level http (via conf.d)
+WS_MAP_FILE="/etc/nginx/conf.d/cbt_exo_ws.map.conf"
+if [ ! -f "$WS_MAP_FILE" ]; then
+  cat > "$WS_MAP_FILE" <<'EOM'
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+EOM
+fi
+
 cat > "$CONF_PATH" <<EOF
 upstream cbt_exo_upstream {
     server ${UP_HOST}:${UP_PORT};
@@ -50,7 +61,11 @@ server {
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_http_version 1.1;
-        proxy_set_header Connection "";
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \$connection_upgrade;
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+        proxy_buffering off;
     }
 
     access_log /var/log/nginx/cbt_exo_access.log;

@@ -62,6 +62,16 @@ else
   UP_HOST=${UP_HOST:-127.0.0.1}
   read -p "Upstream port (default 3000): " UP_PORT
   UP_PORT=${UP_PORT:-3000}
+  # Siapkan map WebSocket pada level http (via conf.d)
+  WS_MAP_FILE="/etc/nginx/conf.d/${VH_DOMAIN}_ws.map.conf"
+  if [ ! -f "$WS_MAP_FILE" ]; then
+    cat > "$WS_MAP_FILE" <<'EOM'
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+EOM
+  fi
   cat > "$CONF_PATH" <<EOF
 upstream ${VH_DOMAIN//[^a-zA-Z0-9_]/_}_up {
     server ${UP_HOST}:${UP_PORT};
@@ -80,7 +90,11 @@ server {
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_http_version 1.1;
-        proxy_set_header Connection "";
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \$connection_upgrade;
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+        proxy_buffering off;
     }
 }
 EOF
