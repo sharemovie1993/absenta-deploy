@@ -32,6 +32,26 @@ ENABLED_DIR="/etc/nginx/sites-enabled"
 mkdir -p "$CONF_DIR" "$ENABLED_DIR" || true
 CONF_PATH="$CONF_DIR/cbt-exo.conf"
 
+# Deteksi konflik server_name dan tawarkan disable
+CONFLICTS=$(grep -Rsl "server_name[[:space:]]\+${CBT_DOMAIN}[; ]" /etc/nginx/sites-available /etc/nginx/sites-enabled 2>/dev/null | grep -v "^${CONF_PATH}$" || true)
+if [ -n "$CONFLICTS" ]; then
+  echo "Terdeteksi konfigurasi lain yang memakai server_name ${CBT_DOMAIN}:"
+  echo "$CONFLICTS"
+  read -p "Nonaktifkan link di sites-enabled untuk entri konflik? (y/n, default y): " DISABLE_CONFLICTS
+  DISABLE_CONFLICTS=${DISABLE_CONFLICTS:-y}
+  if [ "$DISABLE_CONFLICTS" = "y" ] || [ "$DISABLE_CONFLICTS" = "Y" ]; then
+    for f in $CONFLICTS; do
+      base="$(basename "$f")"
+      if [ -L "/etc/nginx/sites-enabled/$base" ]; then
+        rm -f "/etc/nginx/sites-enabled/$base" || true
+        echo "Menonaktifkan /etc/nginx/sites-enabled/$base"
+      fi
+    done
+  else
+    echo "Peringatan: Konflik server_name dapat menyebabkan domain diarahkan ke layanan lain."
+  fi
+fi
+
 # Siapkan map untuk koneksi WebSocket pada level http (via conf.d)
 WS_MAP_FILE="/etc/nginx/conf.d/cbt_exo_ws.map.conf"
 if [ ! -f "$WS_MAP_FILE" ]; then
