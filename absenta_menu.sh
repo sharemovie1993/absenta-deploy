@@ -429,6 +429,7 @@ menu_nginx() {
     echo "6.4 Manage Upstream: Mark DOWN/UP server"
     echo "6.5 Deploy/Update Nginx untuk CBT EXO"
     echo "6.6 Pasang SSL Let's Encrypt untuk CBT EXO"
+    echo "6.7 Buat Virtual Host Baru (Umum)"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -454,6 +455,10 @@ menu_nginx() {
         ;;
       6|6.6)
         bash "$SCRIPT_DIR/deploy_ssl_cbt_exo.sh"
+        pause
+        ;;
+      7|6.7)
+        bash "$SCRIPT_DIR/create_nginx_vhost.sh"
         pause
         ;;
       0)
