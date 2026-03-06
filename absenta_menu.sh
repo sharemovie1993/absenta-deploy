@@ -427,6 +427,7 @@ menu_nginx() {
     echo "6.2 Backup/Hapus konfigurasi Nginx lama (cek konflik server_name)"
     echo "6.3 Update Konfigurasi untuk Mail (Mailcow/webmail)"
     echo "6.4 Manage Upstream: Mark DOWN/UP server"
+    echo "6.5 Deploy/Update Nginx untuk CBT EXO"
     echo "0. Kembali"
     read -p "Pilih: " choice
     case "$choice" in
@@ -444,6 +445,10 @@ menu_nginx() {
         ;;
       4|6.4)
         bash "$SCRIPT_DIR/manage_nginx_upstream.sh"
+        pause
+        ;;
+      5|6.5)
+        bash "$SCRIPT_DIR/deploy_nginx_cbt_exo.sh"
         pause
         ;;
       0)
