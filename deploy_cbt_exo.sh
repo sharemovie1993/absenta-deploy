@@ -12,6 +12,14 @@ INSTALL_DIR=${INSTALL_DIR:-$INSTALL_DIR_DEFAULT}
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
+EXISTING_BIN="$(find "$INSTALL_DIR" -type f \( -name 'main-amd64' -o -name 'main-arm64' \) | head -n1)"
+if [ -n "$EXISTING_BIN" ]; then
+  read -p "Binary EXO terdeteksi di $(dirname "$EXISTING_BIN"). Lewati unduh/ekstrak? (y/n, default y): " SKIP_DL
+  SKIP_DL=${SKIP_DL:-y}
+else
+  SKIP_DL="n"
+fi
+
 if ! command -v wget >/dev/null 2>&1; then
   if command -v apt-get >/dev/null 2>&1; then
     apt-get update -y
@@ -31,17 +39,19 @@ if ! command -v unzip >/dev/null 2>&1; then
   fi
 fi
 
-URL_DEFAULT="https://s3.ekstraordinary.com/extraordinarycbt/release-rosetta/4.6.3-linux+1.zip"
-read -p "URL paket CBT EXO (default $URL_DEFAULT): " PKG_URL
-PKG_URL=${PKG_URL:-$URL_DEFAULT}
-PKG_NAME="$(basename "$PKG_URL")"
-echo "Mengunduh paket: $PKG_URL"
-wget -O "$PKG_NAME" "$PKG_URL"
+if [ "$SKIP_DL" = "n" ] || [ "$SKIP_DL" = "N" ]; then
+  URL_DEFAULT="https://s3.ekstraordinary.com/extraordinarycbt/release-rosetta/4.6.3-linux+1.zip"
+  read -p "URL paket CBT EXO (default $URL_DEFAULT): " PKG_URL
+  PKG_URL=${PKG_URL:-$URL_DEFAULT}
+  PKG_NAME="$(basename "$PKG_URL")"
+  echo "Mengunduh paket: $PKG_URL"
+  wget -O "$PKG_NAME" "$PKG_URL"
 
-if echo "$PKG_NAME" | grep -qi '\.zip$'; then
-  unzip -o "$PKG_NAME"
-elif echo "$PKG_NAME" | grep -qi '\.tar\.gz$'; then
-  tar -xzf "$PKG_NAME"
+  if echo "$PKG_NAME" | grep -qi '\.zip$'; then
+    unzip -o "$PKG_NAME"
+  elif echo "$PKG_NAME" | grep -qi '\.tar\.gz$'; then
+    tar -xzf "$PKG_NAME"
+  fi
 fi
 
 ARCH="$(uname -m)"
@@ -93,8 +103,33 @@ sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE \"$DB_NAME\" TO \"$DB
 
 SQL_FILE="$(find "$INSTALL_DIR" -type f -name 'exo-dump-master.sql' | head -n1)"
 if [ -n "$SQL_FILE" ]; then
-  echo "Import data SQL..."
-  PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$SQL_FILE" || true
+  SHOULD_IMPORT="y"
+  EXISTS_TABLE=$(
+    PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -tAc "SELECT to_regclass('public.pesertas') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]'
+  )
+  if [ "$EXISTS_TABLE" = "t" ] || [ "$EXISTS_TABLE" = "true" ]; then
+    read -p "Tabel terdeteksi di DB ($DB_NAME). Lewati import SQL? (y/n, default y): " SKIP_SQL
+    SKIP_SQL=${SKIP_SQL:-y}
+    if [ "$SKIP_SQL" = "y" ] || [ "$SKIP_SQL" = "Y" ]; then
+      SHOULD_IMPORT="n"
+    fi
+  fi
+  if [ "$SHOULD_IMPORT" = "y" ] || [ "$SHOULD_IMPORT" = "Y" ]; then
+    echo "Import data SQL..."
+    PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$SQL_FILE" || true
+  else
+    echo "Melewati import SQL."
+  fi
+fi
+
+UPDATER_SQL="$(find "$INSTALL_DIR" -type f -name 'update_dari_4.5.0_execute_ini.sql' | head -n1)"
+if [ -n "$UPDATER_SQL" ]; then
+  read -p "Temukan skrip update (update_dari_4.5.0_execute_ini.sql). Jalankan sekarang? (y/n, default n): " RUN_UPD
+  RUN_UPD=${RUN_UPD:-n}
+  if [ "$RUN_UPD" = "y" ] || [ "$RUN_UPD" = "Y" ]; then
+    echo "Menjalankan skrip update..."
+    PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$UPDATER_SQL" || true
+  fi
 fi
 
 mkdir -p "$APP_ROOT/storage"
@@ -156,9 +191,41 @@ STORAGE_PATH=$APP_ROOT/storage
 EOF
 fi
 
+read -p "Buka firewall port 9988/tcp untuk akses CBT? (y/n, default y): " OPEN_FW
+OPEN_FW=${OPEN_FW:-y}
+if [ "$OPEN_FW" = "y" ] || [ "$OPEN_FW" = "Y" ]; then
+  if command -v ufw >/dev/null 2>&1; then
+    ufw allow 9988/tcp || true
+  elif command -v firewall-cmd >/dev/null 2>&1; then
+    firewall-cmd --permanent --add-port=9988/tcp || true
+    firewall-cmd --reload || true
+  elif command -v iptables >/dev/null 2>&1; then
+    iptables -C INPUT -p tcp --dport 9988 -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport 9988 -j ACCEPT || true
+    if command -v netfilter-persistent >/dev/null 2>&1; then
+      netfilter-persistent save || true
+    elif command -v service >/dev/null 2>&1 && [ -x /etc/init.d/netfilter-persistent ]; then
+      service netfilter-persistent save || true
+    elif [ -x /sbin/iptables-save ] && [ -d /etc/iptables ]; then
+      /sbin/iptables-save > /etc/iptables/rules.v4 || true
+    fi
+  else
+    echo "Tidak menemukan tool firewall standar (ufw/firewall-cmd/iptables). Lewati konfigurasi firewall."
+  fi
+fi
+
 read -p "Buat service systemd agar aplikasi berjalan otomatis? (y/n, default y): " MAKE_SVC
 MAKE_SVC=${MAKE_SVC:-y}
 if [ "$MAKE_SVC" = "y" ] || [ "$MAKE_SVC" = "Y" ]; then
+  if command -v ss >/dev/null 2>&1 && ss -plnt 2>/dev/null | grep -q ":9988 "; then
+    echo "Terdapat proses yang menggunakan port 9988."
+    read -p "Hentikan proses yang menggunakan 9988 sebelum start service? (y/n, default y): " KILL9988
+    KILL9988=${KILL9988:-y}
+    if [ "$KILL9988" = "y" ] || [ "$KILL9988" = "Y" ]; then
+      if command -v fuser >/dev/null 2>&1; then
+        fuser -k 9988/tcp || true
+      fi
+    fi
+  fi
   SVC_PATH="/etc/systemd/system/cbt-exo.service"
   cat > "$SVC_PATH" <<EOF
 [Unit]
