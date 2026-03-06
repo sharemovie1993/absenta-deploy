@@ -124,4 +124,33 @@ nginx -t
 systemctl enable nginx
 systemctl reload nginx || systemctl restart nginx
 
-echo "Nginx untuk CBT EXO siap: http://${CBT_DOMAIN}"
+read -p "Pasang SSL Let's Encrypt untuk ${CBT_DOMAIN} sekarang? (y/n, default y): " INSTALL_SSL
+INSTALL_SSL=${INSTALL_SSL:-y}
+if [ "$INSTALL_SSL" = "y" ] || [ "$INSTALL_SSL" = "Y" ]; then
+  if ! command -v certbot >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+      apt-get update -y && apt-get install -y certbot python3-certbot-nginx || true
+    elif command -v apt >/dev/null 2>&1; then
+      apt update -y && apt install -y certbot python3-certbot-nginx || true
+    fi
+    if ! command -v certbot >/dev/null 2>&1 && command -v snap >/dev/null 2>&1; then
+      snap install core || true
+      snap refresh core || true
+      snap install --classic certbot || true
+      [ -x /snap/bin/certbot ] && [ ! -e /usr/bin/certbot ] && ln -s /snap/bin/certbot /usr/bin/certbot || true
+    fi
+  fi
+  if command -v certbot >/dev/null 2>&1; then
+    read -p "Email Let's Encrypt (wajib): " CERT_EMAIL
+    if [ -n "$CERT_EMAIL" ]; then
+      certbot --nginx -d "$CBT_DOMAIN" -m "$CERT_EMAIL" --agree-tos --redirect --no-eff-email || true
+      nginx -t && systemctl reload nginx || systemctl restart nginx
+    else
+      echo "Email kosong, lewati pemasangan SSL."
+    fi
+  else
+    echo "certbot tidak tersedia, lewati pemasangan SSL."
+  fi
+fi
+
+echo "Nginx untuk CBT EXO siap di http(s)://${CBT_DOMAIN}"
