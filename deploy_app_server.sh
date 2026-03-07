@@ -94,6 +94,12 @@ REDIS_PORT=${REDIS_PORT:-6379}
 read -s -p "Redis password (kosongkan jika tidak ada): " REDIS_PASS
 echo ""
 
+read -p "API base URL (contoh: https://api.absenta.id atau http://IP:PORT): " API_BASE_URL
+read -p "Frontend URL (contoh: https://www.absenta.id atau http://IP:8080): " FRONT_URL
+read -p "Public Invoice Base URL [default: sama dengan API base]: " PUB_INV_BASE
+PUB_INV_BASE=${PUB_INV_BASE:-$API_BASE_URL}
+read -p "Tenant base domain (mis. absenta.id) [opsional]: " TENANT_BASE
+
 echo "Menyiapkan backend..."
 cd "$BACKEND_DIR"
 
@@ -119,6 +125,67 @@ if [ -f ".env" ]; then
     sed -i "s|^REDIS_URL=.*|REDIS_URL=\"$REDIS_URL\"|" .env
   else
     printf "\nREDIS_URL=\"%s\"\n" "$REDIS_URL" >> .env
+  fi
+
+  if [ -n "$API_BASE_URL" ]; then
+    if grep -q "^API_URL=" .env; then
+      sed -i "s|^API_URL=.*|API_URL=\"$API_BASE_URL\"|" .env
+    else
+      printf "\nAPI_URL=\"%s\"\n" "$API_BASE_URL" >> .env
+    fi
+    SCHEME="$(echo "$API_BASE_URL" | sed -E 's#^(https?)://.*#\1#')"
+    if [ -n "$SCHEME" ]; then
+      if grep -q "^PUBLIC_APP_SCHEME=" .env; then
+        sed -i "s|^PUBLIC_APP_SCHEME=.*|PUBLIC_APP_SCHEME=$SCHEME|" .env
+      else
+        printf "\nPUBLIC_APP_SCHEME=%s\n" "$SCHEME" >> .env
+      fi
+    fi
+  fi
+  if [ -n "$FRONT_URL" ]; then
+    if grep -q "^FRONTEND_URL=" .env; then
+      sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=\"$FRONT_URL\"|" .env
+    else
+      printf "\nFRONTEND_URL=\"%s\"\n" "$FRONT_URL" >> .env
+    fi
+  fi
+  if [ -n "$PUB_INV_BASE" ]; then
+    if grep -q "^PUBLIC_INVOICE_BASE_URL=" .env; then
+      sed -i "s|^PUBLIC_INVOICE_BASE_URL=.*|PUBLIC_INVOICE_BASE_URL=\"$PUB_INV_BASE\"|" .env
+    else
+      printf "\nPUBLIC_INVOICE_BASE_URL=\"%s\"\n" "$PUB_INV_BASE" >> .env
+    fi
+    if grep -q "^PUBLIC_APP_URL=" .env; then
+      sed -i "s|^PUBLIC_APP_URL=.*|PUBLIC_APP_URL=\"$PUB_INV_BASE\"|" .env
+    else
+      printf "\nPUBLIC_APP_URL=\"%s\"\n" "$PUB_INV_BASE" >> .env
+    fi
+    if grep -q "^TRIPAY_WEBHOOK_URL=" .env; then
+      sed -i "s|^TRIPAY_WEBHOOK_URL=.*|TRIPAY_WEBHOOK_URL=\"${PUB_INV_BASE%/}/webhooks/payment/tripay\"|" .env
+    else
+      printf "\nTRIPAY_WEBHOOK_URL=\"%s\"\n" "${PUB_INV_BASE%/}/webhooks/payment/tripay" >> .env
+    fi
+    if grep -q "^MIDTRANS_WEBHOOK_URL=" .env; then
+      sed -i "s|^MIDTRANS_WEBHOOK_URL=.*|MIDTRANS_WEBHOOK_URL=\"${PUB_INV_BASE%/}/api/payments/midtrans/webhook\"|" .env
+    fi
+    if grep -q "^STRIPE_WEBHOOK_URL=" .env; then
+      sed -i "s|^STRIPE_WEBHOOK_URL=.*|STRIPE_WEBHOOK_URL=\"${PUB_INV_BASE%/}/api/payments/stripe/webhook\"|" .env
+    fi
+    if grep -q "^XENDIT_WEBHOOK_URL=" .env; then
+      sed -i "s|^XENDIT_WEBHOOK_URL=.*|XENDIT_WEBHOOK_URL=\"${PUB_INV_BASE%/}/api/payments/xendit/webhook\"|" .env
+    fi
+  fi
+  if [ -n "$TENANT_BASE" ]; then
+    if grep -q "^PUBLIC_DOMAIN_BASE=" .env; then
+      sed -i "s|^PUBLIC_DOMAIN_BASE=.*|PUBLIC_DOMAIN_BASE=$TENANT_BASE|" .env
+    else
+      printf "\nPUBLIC_DOMAIN_BASE=%s\n" "$TENANT_BASE" >> .env
+    fi
+    if grep -q "^TENANT_BASE_DOMAIN=" .env; then
+      sed -i "s|^TENANT_BASE_DOMAIN=.*|TENANT_BASE_DOMAIN=$TENANT_BASE|" .env
+    else
+      printf "\nTENANT_BASE_DOMAIN=%s\n" "$TENANT_BASE" >> .env
+    fi
   fi
 fi
 
