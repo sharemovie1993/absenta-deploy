@@ -84,6 +84,13 @@ $env:APP_VERSION = $AppVersion
 
 Write-Host "-> Menjalankan stack: docker compose -f $ComposeFile up -d --remove-orphans"
 try {
+  Write-Host "-> Stop & remove containers (down)"
+  docker compose -f "$ComposeFile" down | Write-Host
+
+  Write-Host "-> Build images (no-cache)"
+  docker compose -f "$ComposeFile" build --no-cache | Write-Host
+
+  Write-Host "-> Start containers (up -d)"
   docker compose -f "$ComposeFile" up -d --remove-orphans | Write-Host
 } catch {
   Write-Warning "Compose up gagal (engine/koneksi?). Mencoba ulang singkat..."
@@ -98,9 +105,27 @@ try {
   Write-Warning "Gagal mengambil daftar container (engine belum siap?)."
 }
 
-Write-Host "-> Cek health backend API (http://localhost:3000/health)"
+# Dump logs for exited containers (diagnostic)
 try {
-  $resp = Invoke-WebRequest -Uri "http://localhost:3000/health" -UseBasicParsing -TimeoutSec 10
+  $exited = docker ps -a --filter "status=exited" --format "{{.Names}}"
+  if ($exited) {
+    Write-Warning "Terdapat container Exited. Menampilkan log:"
+    $names = $exited -split "`n"
+    foreach ($n in $names) {
+      if ($n) {
+        Write-Host "==== LOG: $n ===="
+        docker logs $n | Write-Host
+        Write-Host "=================="
+      }
+    }
+  }
+} catch {
+  Write-Warning "Gagal mengambil log container yang Exited."
+}
+
+Write-Host "-> Cek health backend API (http://localhost:3001/health)"
+try {
+  $resp = Invoke-WebRequest -Uri "http://localhost:3001/health" -UseBasicParsing -TimeoutSec 10
   Write-Host ("Health code: " + $resp.StatusCode)
 } catch {
   Write-Warning "Health check gagal (API mungkin masih starting)."

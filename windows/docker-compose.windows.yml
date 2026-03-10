@@ -15,11 +15,12 @@ services:
       - NODE_NAME=node-api
       - EMBEDDED_WORKERS=false
       - REDIS_URL=redis://redis:6379
+      - PORT=3001
       # Set DATABASE_URL via .env or override when running
     depends_on:
       - redis
     ports:
-      - "3000:3000"
+      - "3001:3001"
 
   # Node API side workers
   worker-infra:
