@@ -21,8 +21,6 @@ services:
     environment:
       - NODE_NAME=node-api
       - EMBEDDED_WORKERS=false
-      - REDIS_URL=redis://redis:6379
-      - PORT=3001
     depends_on:
       - redis
     ports:
@@ -38,7 +36,6 @@ services:
       - ../env/env.production
     environment:
       - NODE_NAME=node-api
-      - REDIS_URL=redis://redis:6379
     command: ["node","dist/workers/infra.worker.js"]
     depends_on:
       - redis
@@ -53,7 +50,6 @@ services:
       - ../env/env.production
     environment:
       - NODE_NAME=node-api
-      - REDIS_URL=redis://redis:6379
     command: ["node","dist/infra/workerAgent.js"]
     depends_on:
       - redis
@@ -68,7 +64,6 @@ services:
       - ../env/env.production
     environment:
       - NODE_NAME=node-billing
-      - REDIS_URL=redis://redis:6379
     command: ["node","dist/workers/billing.worker.js"]
     depends_on:
       - redis
@@ -83,7 +78,6 @@ services:
       - ../env/env.production
     environment:
       - NODE_NAME=node-billing
-      - REDIS_URL=redis://redis:6379
     command: ["node","dist/workers/notification.worker.js"]
     depends_on:
       - redis
@@ -98,7 +92,6 @@ services:
       - ../env/env.production
     environment:
       - NODE_NAME=node-attendance
-      - REDIS_URL=redis://redis:6379
     command: ["node","dist/workers/attendance.worker.js"]
     depends_on:
       - redis
@@ -113,7 +106,6 @@ services:
       - ../env/env.production
     environment:
       - NODE_NAME=node-attendance
-      - REDIS_URL=redis://redis:6379
     command: ["node","dist/workers/analytics.worker.js"]
     depends_on:
       - redis
@@ -128,7 +120,6 @@ services:
       - ../env/env.production
     environment:
       - NODE_NAME=node-attendance
-      - REDIS_URL=redis://redis:6379
     command: ["node","dist/workers/maintenance.worker.js"]
     depends_on:
       - redis

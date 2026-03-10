@@ -1,10 +1,4 @@
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: absenta-redis
-    ports:
-      - "6379:6379"
-
   backend-api:
     build:
       context: ../../ProjekAbsenta/backend/absenta_backend
@@ -21,13 +15,9 @@ services:
     environment:
       - NODE_NAME=node-api
       - EMBEDDED_WORKERS=false
-      # Set DATABASE_URL via .env or override when running
-    depends_on:
-      - redis
     ports:
       - "3001:3001"
 
-  # Node API side workers
   worker-infra:
     image: absenta-backend:latest
     container_name: absenta-worker-infra
@@ -39,8 +29,6 @@ services:
     environment:
       - NODE_NAME=node-api
     command: ["node","dist/workers/infra.worker.js"]
-    depends_on:
-      - redis
 
   worker-agent:
     image: absenta-backend:latest
@@ -53,10 +41,7 @@ services:
     environment:
       - NODE_NAME=node-api
     command: ["node","dist/infra/workerAgent.js"]
-    depends_on:
-      - redis
 
-  # Node Billing (server 2) workers
   worker-billing:
     image: absenta-backend:latest
     container_name: absenta-worker-billing
@@ -68,8 +53,6 @@ services:
     environment:
       - NODE_NAME=node-billing
     command: ["node","dist/workers/billing.worker.js"]
-    depends_on:
-      - redis
 
   worker-notification:
     image: absenta-backend:latest
@@ -82,10 +65,7 @@ services:
     environment:
       - NODE_NAME=node-billing
     command: ["node","dist/workers/notification.worker.js"]
-    depends_on:
-      - redis
 
-  # Node Attendance (server 3) workers
   worker-attendance:
     image: absenta-backend:latest
     container_name: absenta-worker-attendance
@@ -97,8 +77,6 @@ services:
     environment:
       - NODE_NAME=node-attendance
     command: ["node","dist/workers/attendance.worker.js"]
-    depends_on:
-      - redis
 
   worker-analytics:
     image: absenta-backend:latest
@@ -111,8 +89,6 @@ services:
     environment:
       - NODE_NAME=node-attendance
     command: ["node","dist/workers/analytics.worker.js"]
-    depends_on:
-      - redis
 
   worker-maintenance:
     image: absenta-backend:latest
@@ -125,8 +101,6 @@ services:
     environment:
       - NODE_NAME=node-attendance
     command: ["node","dist/workers/maintenance.worker.js"]
-    depends_on:
-      - redis
 
 networks:
   default:
