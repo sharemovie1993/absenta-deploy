@@ -134,6 +134,7 @@ server {
 
     proxy_pass http://absenta_backend_upstream;
     proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -165,6 +166,7 @@ server {
   location ^~ /webhooks/ {
     proxy_pass http://absenta_backend_upstream;
     proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -174,6 +176,7 @@ server {
   location ^~ /payment/ {
     proxy_pass http://absenta_backend_upstream;
     proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -181,8 +184,9 @@ server {
   }
 
   location ^~ /invoice/public/ {
-    proxy_pass http://absenta_backend_upstream;
+    proxy_pass http://absenta_frontend_upstream;
     proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -231,6 +235,7 @@ server {
 
     proxy_pass http://absenta_backend_upstream;
     proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -251,6 +256,7 @@ server {
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection "upgrade";
     proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -263,6 +269,7 @@ server {
   location = /sw.js {
     proxy_pass http://absenta_frontend_upstream;
     proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -300,6 +307,7 @@ server {
   location / {
     proxy_pass http://absenta_frontend_upstream;
     proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -408,8 +416,9 @@ server {
   }
 
   location ^~ /invoice/public/ {
-    proxy_pass http://absenta_backend_upstream;
+    proxy_pass http://${FRONTEND_HOST}:${FRONTEND_PORT};
     proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -440,6 +449,7 @@ server {
 
     proxy_pass http://absenta_backend_upstream;
     proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -460,6 +470,7 @@ server {
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection "upgrade";
     proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -557,6 +568,7 @@ server {
 
     proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
     proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -601,8 +613,9 @@ server {
   }
 
   location ^~ /invoice/public/ {
-    proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
+    proxy_pass http://${FRONTEND_HOST}:${FRONTEND_PORT};
     proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -651,6 +664,7 @@ server {
 
     proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
     proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Tenant-Subdomain \$tenant_subdomain;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;

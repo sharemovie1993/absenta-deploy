@@ -1,0 +1,88 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: absenta-redis
+    ports:
+      - "6379:6379"
+
+  backend-api:
+    build:
+      context: ../../ProjekAbsenta/backend/absenta_backend
+      dockerfile: Dockerfile
+    image: absenta-backend:latest
+    container_name: absenta-backend-api
+    environment:
+      - NODE_NAME=node-api
+      - EMBEDDED_WORKERS=false
+      - REDIS_URL=redis://redis:6379
+      # Set DATABASE_URL via .env or override when running
+    depends_on:
+      - redis
+    ports:
+      - "3000:3000"
+
+  worker-billing:
+    image: absenta-backend:latest
+    container_name: absenta-worker-billing
+    environment:
+      - NODE_NAME=node-billing
+      - REDIS_URL=redis://redis:6379
+    command: ["node","dist/workers/billing.worker.js"]
+    depends_on:
+      - redis
+
+  worker-notification:
+    image: absenta-backend:latest
+    container_name: absenta-worker-notification
+    environment:
+      - NODE_NAME=node-notification
+      - REDIS_URL=redis://redis:6379
+    command: ["node","dist/workers/notification.worker.js"]
+    depends_on:
+      - redis
+
+  worker-attendance:
+    image: absenta-backend:latest
+    container_name: absenta-worker-attendance
+    environment:
+      - NODE_NAME=node-attendance
+      - REDIS_URL=redis://redis:6379
+    command: ["node","dist/workers/attendance.worker.js"]
+    depends_on:
+      - redis
+
+  worker-analytics:
+    image: absenta-backend:latest
+    container_name: absenta-worker-analytics
+    environment:
+      - NODE_NAME=node-analytics
+      - REDIS_URL=redis://redis:6379
+    command: ["node","dist/workers/analytics.worker.js"]
+    depends_on:
+      - redis
+
+  worker-maintenance:
+    image: absenta-backend:latest
+    container_name: absenta-worker-maintenance
+    environment:
+      - NODE_NAME=node-maintenance
+      - REDIS_URL=redis://redis:6379
+    command: ["node","dist/workers/maintenance.worker.js"]
+    depends_on:
+      - redis
+
+  worker-infra:
+    image: absenta-backend:latest
+    container_name: absenta-worker-infra
+    environment:
+      - NODE_NAME=node-infra
+      - REDIS_URL=redis://redis:6379
+    command: ["node","dist/workers/infra.worker.js"]
+    depends_on:
+      - redis
+
+networks:
+  default:
+    name: absenta-net
