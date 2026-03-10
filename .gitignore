@@ -1,5 +1,4 @@
 # Ignore environment files (keep examples)
-env/*
 !env/*.example
 
 # OS junk
