@@ -11,11 +11,16 @@ services:
       dockerfile: Dockerfile
     image: absenta-backend:latest
     container_name: absenta-backend-api
+    env_file:
+      - ./env.common
     environment:
       - NODE_NAME=node-api
       - EMBEDDED_WORKERS=false
       - REDIS_URL=redis://redis:6379
       - PORT=3001
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - PUBLIC_INVOICE_BASE_URL=${PUBLIC_INVOICE_BASE_URL}
       # Set DATABASE_URL via .env or override when running
     depends_on:
       - redis
@@ -26,9 +31,13 @@ services:
   worker-infra:
     image: absenta-backend:latest
     container_name: absenta-worker-infra
+    env_file:
+      - ./env.common
     environment:
       - NODE_NAME=node-api
       - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
     command: ["node","dist/workers/infra.worker.js"]
     depends_on:
       - redis
@@ -36,9 +45,13 @@ services:
   worker-agent:
     image: absenta-backend:latest
     container_name: absenta-worker-agent
+    env_file:
+      - ./env.common
     environment:
       - NODE_NAME=node-api
       - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
     command: ["node","dist/infra/workerAgent.js"]
     depends_on:
       - redis
@@ -47,9 +60,13 @@ services:
   worker-billing:
     image: absenta-backend:latest
     container_name: absenta-worker-billing
+    env_file:
+      - ./env.common
     environment:
       - NODE_NAME=node-billing
       - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
     command: ["node","dist/workers/billing.worker.js"]
     depends_on:
       - redis
@@ -57,9 +74,13 @@ services:
   worker-notification:
     image: absenta-backend:latest
     container_name: absenta-worker-notification
+    env_file:
+      - ./env.common
     environment:
       - NODE_NAME=node-billing
       - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
     command: ["node","dist/workers/notification.worker.js"]
     depends_on:
       - redis
@@ -68,9 +89,13 @@ services:
   worker-attendance:
     image: absenta-backend:latest
     container_name: absenta-worker-attendance
+    env_file:
+      - ./env.common
     environment:
       - NODE_NAME=node-attendance
       - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
     command: ["node","dist/workers/attendance.worker.js"]
     depends_on:
       - redis
@@ -78,9 +103,13 @@ services:
   worker-analytics:
     image: absenta-backend:latest
     container_name: absenta-worker-analytics
+    env_file:
+      - ./env.common
     environment:
       - NODE_NAME=node-attendance
       - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
     command: ["node","dist/workers/analytics.worker.js"]
     depends_on:
       - redis
@@ -88,9 +117,13 @@ services:
   worker-maintenance:
     image: absenta-backend:latest
     container_name: absenta-worker-maintenance
+    env_file:
+      - ./env.common
     environment:
       - NODE_NAME=node-attendance
       - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
     command: ["node","dist/workers/maintenance.worker.js"]
     depends_on:
       - redis

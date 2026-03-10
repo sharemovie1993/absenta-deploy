@@ -2,7 +2,8 @@ Param(
   [string]$BackendPath = "C:\Users\SERVER-DELL\Documents\Projek Koprasi Sekolah\ProjekAbsenta\backend\absenta_backend",
   [string]$ComposeFile = "C:\Users\SERVER-DELL\Documents\Projek Koprasi Sekolah\absenta-deploy\windows\docker-compose.windows.yml",
   [string]$DatabaseUrl = "",
-  [string]$AppVersion = "1.0.0"
+  [string]$AppVersion = "1.0.0",
+  [string]$EnvFile = "C:\Users\SERVER-DELL\Documents\Projek Koprasi Sekolah\absenta-deploy\windows\env.common"
 )
 
 $ErrorActionPreference = "Stop"
@@ -82,20 +83,35 @@ if ($DatabaseUrl -ne "") {
 }
 $env:APP_VERSION = $AppVersion
 
+# Ensure env file exists
+if (-not (Test-Path $EnvFile)) {
+  Write-Warning "Env file tidak ditemukan: $EnvFile"
+  $sample = Join-Path (Split-Path $EnvFile -Parent) "env.common.example"
+  if (Test-Path $sample) {
+    Copy-Item $sample $EnvFile -Force
+    Write-Host "Template env dibuat di $EnvFile. Mohon isi nilai yang benar sebelum menjalankan ulang."
+    Write-Error "Hentikan proses: set DATABASE_URL, JWT_SECRET, PUBLIC_INVOICE_BASE_URL pada $EnvFile lalu ulangi."
+    exit 1
+  } else {
+    Write-Error "Buat file env dengan kunci: DATABASE_URL, JWT_SECRET, PUBLIC_INVOICE_BASE_URL lalu ulangi."
+    exit 1
+  }
+}
+
 Write-Host "-> Menjalankan stack: docker compose -f $ComposeFile up -d --remove-orphans"
 try {
   Write-Host "-> Stop & remove containers (down)"
-  docker compose -f "$ComposeFile" down | Write-Host
+  docker compose --env-file "$EnvFile" -f "$ComposeFile" down | Write-Host
 
   Write-Host "-> Build images (no-cache)"
-  docker compose -f "$ComposeFile" build --no-cache | Write-Host
+  docker compose --env-file "$EnvFile" -f "$ComposeFile" build --no-cache | Write-Host
 
   Write-Host "-> Start containers (up -d)"
-  docker compose -f "$ComposeFile" up -d --remove-orphans | Write-Host
+  docker compose --env-file "$EnvFile" -f "$ComposeFile" up -d --remove-orphans | Write-Host
 } catch {
   Write-Warning "Compose up gagal (engine/koneksi?). Mencoba ulang singkat..."
   Start-Sleep -Seconds 8
-  docker compose -f "$ComposeFile" up -d --remove-orphans | Write-Host
+  docker compose --env-file "$EnvFile" -f "$ComposeFile" up -d --remove-orphans | Write-Host
 }
 
 Write-Host "-> Menampilkan status containers"
