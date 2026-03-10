@@ -23,13 +23,11 @@ services:
       - EMBEDDED_WORKERS=false
       - REDIS_URL=redis://redis:6379
       - PORT=3001
-      # Set DATABASE_URL via .env or override when running
     depends_on:
       - redis
     ports:
       - "3001:3001"
 
-  # Node API side workers
   worker-infra:
     image: absenta-backend:latest
     container_name: absenta-worker-infra
@@ -60,7 +58,6 @@ services:
     depends_on:
       - redis
 
-  # Node Billing (server 2) workers
   worker-billing:
     image: absenta-backend:latest
     container_name: absenta-worker-billing
@@ -91,7 +88,6 @@ services:
     depends_on:
       - redis
 
-  # Node Attendance (server 3) workers
   worker-attendance:
     image: absenta-backend:latest
     container_name: absenta-worker-attendance
