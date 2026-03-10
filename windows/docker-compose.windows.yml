@@ -23,6 +23,28 @@ services:
     ports:
       - "3000:3000"
 
+  # Node API side workers
+  worker-infra:
+    image: absenta-backend:latest
+    container_name: absenta-worker-infra
+    environment:
+      - NODE_NAME=node-api
+      - REDIS_URL=redis://redis:6379
+    command: ["node","dist/workers/infra.worker.js"]
+    depends_on:
+      - redis
+
+  worker-agent:
+    image: absenta-backend:latest
+    container_name: absenta-worker-agent
+    environment:
+      - NODE_NAME=node-api
+      - REDIS_URL=redis://redis:6379
+    command: ["node","dist/infra/workerAgent.js"]
+    depends_on:
+      - redis
+
+  # Node Billing (server 2) workers
   worker-billing:
     image: absenta-backend:latest
     container_name: absenta-worker-billing
@@ -37,12 +59,13 @@ services:
     image: absenta-backend:latest
     container_name: absenta-worker-notification
     environment:
-      - NODE_NAME=node-notification
+      - NODE_NAME=node-billing
       - REDIS_URL=redis://redis:6379
     command: ["node","dist/workers/notification.worker.js"]
     depends_on:
       - redis
 
+  # Node Attendance (server 3) workers
   worker-attendance:
     image: absenta-backend:latest
     container_name: absenta-worker-attendance
@@ -57,7 +80,7 @@ services:
     image: absenta-backend:latest
     container_name: absenta-worker-analytics
     environment:
-      - NODE_NAME=node-analytics
+      - NODE_NAME=node-attendance
       - REDIS_URL=redis://redis:6379
     command: ["node","dist/workers/analytics.worker.js"]
     depends_on:
@@ -67,19 +90,9 @@ services:
     image: absenta-backend:latest
     container_name: absenta-worker-maintenance
     environment:
-      - NODE_NAME=node-maintenance
+      - NODE_NAME=node-attendance
       - REDIS_URL=redis://redis:6379
     command: ["node","dist/workers/maintenance.worker.js"]
-    depends_on:
-      - redis
-
-  worker-infra:
-    image: absenta-backend:latest
-    container_name: absenta-worker-infra
-    environment:
-      - NODE_NAME=node-infra
-      - REDIS_URL=redis://redis:6379
-    command: ["node","dist/workers/infra.worker.js"]
     depends_on:
       - redis
 
