@@ -9,9 +9,45 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "=== Absenta Multi-Node (Windows Containers) Deployment ==="
 
+# Pastikan Docker CLI tersedia
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-  Write-Error "Docker tidak ditemukan di PATH. Mohon install Docker Desktop for Windows."
-  exit 1
+  Write-Host "Docker CLI belum terdeteksi. Memastikan Docker Desktop berjalan..."
+}
+
+# Pastikan Docker Desktop berjalan
+try {
+  $proc = Get-Process -Name "Docker Desktop" -ErrorAction SilentlyContinue
+  if (-not $proc) {
+    Write-Host "-> Menjalankan Docker Desktop ..."
+    Start-Process -FilePath 'C:\Program Files\Docker\Docker\Docker Desktop.exe' -ErrorAction SilentlyContinue | Out-Null
+  } else {
+    Write-Host "-> Docker Desktop sudah berjalan."
+  }
+} catch {
+  Write-Warning "Gagal memulai Docker Desktop otomatis. Lanjutkan jika sudah berjalan secara manual."
+}
+
+# Tunggu engine siap dan pilih konteks Linux
+Write-Host "-> Menunggu Docker engine siap (Linux) ..."
+$maxWait = 180
+$waited = 0
+while ($waited -lt $maxWait) {
+  try {
+    docker context use desktop-linux | Out-Null
+  } catch {}
+  try {
+    $info = docker info 2>$null
+    if ($LASTEXITCODE -eq 0 -and $info) {
+      Write-Host "   Docker engine siap."
+      break
+    }
+  } catch {}
+  Start-Sleep -Seconds 5
+  $waited += 5
+  Write-Host ("   menunggu... {0}s" -f $waited)
+}
+if ($waited -ge $maxWait) {
+  Write-Warning "Docker engine belum siap. Silakan pastikan Docker Desktop berjalan dan Linux containers aktif (Settings > General > Use the WSL 2 based engine)."
 }
 
 if (-not (Test-Path $BackendPath)) {
@@ -25,7 +61,13 @@ try {
   npm run build | Write-Host
 
   Write-Host "-> Build Docker image: absenta-backend:latest"
-  docker build -t absenta-backend:latest . | Write-Host
+  try {
+    docker build -t absenta-backend:latest . | Write-Host
+  } catch {
+    Write-Warning "Build image gagal (engine belum siap?). Mencoba ulang singkat..."
+    Start-Sleep -Seconds 8
+    docker build -t absenta-backend:latest . | Write-Host
+  }
 } finally {
   Pop-Location
 }
@@ -41,10 +83,20 @@ if ($DatabaseUrl -ne "") {
 $env:APP_VERSION = $AppVersion
 
 Write-Host "-> Menjalankan stack: docker compose -f $ComposeFile up -d --remove-orphans"
-docker compose -f "$ComposeFile" up -d --remove-orphans | Write-Host
+try {
+  docker compose -f "$ComposeFile" up -d --remove-orphans | Write-Host
+} catch {
+  Write-Warning "Compose up gagal (engine/koneksi?). Mencoba ulang singkat..."
+  Start-Sleep -Seconds 8
+  docker compose -f "$ComposeFile" up -d --remove-orphans | Write-Host
+}
 
 Write-Host "-> Menampilkan status containers"
-docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}" | Write-Host
+try {
+  docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}" | Write-Host
+} catch {
+  Write-Warning "Gagal mengambil daftar container (engine belum siap?)."
+}
 
 Write-Host "-> Cek health backend API (http://localhost:3000/health)"
 try {
