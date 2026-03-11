@@ -78,6 +78,31 @@ $DOCKER_BIN compose -f "$COMPOSE_FILE" down || true
 $DOCKER_BIN compose -f "$COMPOSE_FILE" build --no-cache
 $DOCKER_BIN compose -f "$COMPOSE_FILE" up -d --remove-orphans
 $DOCKER_BIN ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
+
+env_dir="$DIR/../env"
+tmp_env="/tmp/absenta-worker-env-node-attendance.env"
+cat "$env_dir/env.common" "$env_dir/env.database" "$env_dir/env.redis" "$env_dir/env.production" > "$tmp_env" || true
+echo "NODE_NAME=node-attendance" >> "$tmp_env"
+
+ensure_standby() {
+  local name="$1"
+  local node_name="$2"
+  local script="$3"
+  if $DOCKER_BIN ps -a --format "{{.Names}}" | grep -q "^${name}\$" 2>/dev/null; then
+    $DOCKER_BIN stop "$name" >/dev/null 2>&1 || true
+    return 0
+  fi
+  local tmp="/tmp/absenta-worker-env-${node_name}.env"
+  cat "$env_dir/env.common" "$env_dir/env.database" "$env_dir/env.redis" "$env_dir/env.production" > "$tmp" || true
+  echo "NODE_NAME=${node_name}" >> "$tmp"
+  $DOCKER_BIN create --name "$name" --restart unless-stopped --network absenta-net --env-file "$tmp" absenta-backend:latest node "$script" >/dev/null 2>&1 || true
+}
+
+ensure_standby "absenta-worker-attendance-2" "node-attendance" "dist/workers/attendance.worker.js"
+ensure_standby "absenta-worker-attendance-3" "node-attendance" "dist/workers/attendance.worker.js"
+ensure_standby "absenta-worker-attendance-4" "node-attendance" "dist/workers/attendance.worker.js"
+ensure_standby "absenta-worker-billing-2" "node-billing" "dist/workers/billing.worker.js"
+ensure_standby "absenta-worker-notification-2" "node-billing" "dist/workers/notification.worker.js"
 exited="$($DOCKER_BIN ps -a --filter "status=exited" --format "{{.Names}}" || true)"
   for n in $exited; do
     echo "==== LOG: $n ===="

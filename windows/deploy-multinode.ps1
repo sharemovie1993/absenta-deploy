@@ -105,6 +105,56 @@ try {
   Write-Warning "Gagal mengambil daftar container (engine belum siap?)."
 }
 
+try {
+  $composeDir = Split-Path -Parent $ComposeFile
+  $envDir = Resolve-Path (Join-Path $composeDir "..\env")
+  $envCommon = Join-Path $envDir "env.common"
+  $envDb = Join-Path $envDir "env.database"
+  $envRedis = Join-Path $envDir "env.redis"
+  $envProd = Join-Path $envDir "env.production"
+
+  function Get-ContainerNames {
+    try {
+      $out = docker ps -a --format "{{.Names}}"
+      if (-not $out) { return @() }
+      return ($out -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" })
+    } catch {
+      return @()
+    }
+  }
+
+  function Ensure-StandbyContainer {
+    param(
+      [string]$Name,
+      [string]$NodeName,
+      [string]$CommandScript
+    )
+    $names = Get-ContainerNames
+    if ($names -contains $Name) {
+      try { docker stop $Name | Out-Null } catch {}
+      return
+    }
+    $tmp = Join-Path $env:TEMP ("absenta-worker-env-" + $NodeName + ".env")
+    $raw = @()
+    if (Test-Path $envCommon) { $raw += Get-Content $envCommon }
+    if (Test-Path $envDb) { $raw += Get-Content $envDb }
+    if (Test-Path $envRedis) { $raw += Get-Content $envRedis }
+    if (Test-Path $envProd) { $raw += Get-Content $envProd }
+    $raw += ("NODE_NAME=" + $NodeName)
+    $raw | Set-Content -Path $tmp -Encoding ASCII
+
+    docker create --name $Name --restart unless-stopped --network absenta-net --env-file $tmp absenta-backend:latest node $CommandScript | Out-Null
+  }
+
+  Ensure-StandbyContainer -Name "absenta-worker-attendance-2" -NodeName "node-attendance" -CommandScript "dist/workers/attendance.worker.js"
+  Ensure-StandbyContainer -Name "absenta-worker-attendance-3" -NodeName "node-attendance" -CommandScript "dist/workers/attendance.worker.js"
+  Ensure-StandbyContainer -Name "absenta-worker-attendance-4" -NodeName "node-attendance" -CommandScript "dist/workers/attendance.worker.js"
+  Ensure-StandbyContainer -Name "absenta-worker-billing-2" -NodeName "node-billing" -CommandScript "dist/workers/billing.worker.js"
+  Ensure-StandbyContainer -Name "absenta-worker-notification-2" -NodeName "node-billing" -CommandScript "dist/workers/notification.worker.js"
+} catch {
+  Write-Warning "Gagal menyiapkan standby worker containers untuk autoscaling."
+}
+
 # Dump logs for exited containers (diagnostic)
 try {
   $exited = docker ps -a --filter "status=exited" --format "{{.Names}}"

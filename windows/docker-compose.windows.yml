@@ -21,6 +21,7 @@ services:
     environment:
       - NODE_NAME=node-api
       - EMBEDDED_WORKERS=false
+      - PM2_DISABLED=true
       # Set DATABASE_URL via .env or override when running
     depends_on:
       - redis
@@ -39,20 +40,6 @@ services:
     environment:
       - NODE_NAME=node-api
     command: ["node","dist/workers/infra.worker.js"]
-    depends_on:
-      - redis
-
-  worker-agent:
-    image: absenta-backend:latest
-    container_name: absenta-worker-agent
-    env_file:
-      - ../env/env.common
-      - ../env/env.database
-      - ../env/env.redis
-      - ../env/env.production
-    environment:
-      - NODE_NAME=node-api
-    command: ["node","dist/infra/workerAgent.js"]
     depends_on:
       - redis
 
