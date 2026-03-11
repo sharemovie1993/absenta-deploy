@@ -115,6 +115,87 @@ services:
     depends_on:
       - redis
 
+  worker-agent:
+    image: absenta-backend:latest
+    container_name: absenta-worker-agent
+    env_file:
+      - ../env/env.common
+      - ../env/env.redis
+      - ../env/env.production
+    environment:
+      - NODE_NAME=worker-agent
+      - AGENT_HANDLE_ALL_NODES=true
+      - AGENT_MAX_INSTANCES=10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["node","dist/infra/control-agent.js"]
+    depends_on:
+      - redis
+
+  worker-attendance-2:
+    image: absenta-backend:latest
+    container_name: absenta-worker-attendance-2
+    profiles: ["templates"]
+    restart: "no"
+    env_file:
+      - ../env/env.common
+      - ../env/env.database
+      - ../env/env.redis
+      - ../env/env.production
+    environment:
+      - NODE_NAME=node-attendance
+    command: ["node","dist/workers/attendance.worker.js"]
+    depends_on:
+      - redis
+
+  worker-attendance-3:
+    image: absenta-backend:latest
+    container_name: absenta-worker-attendance-3
+    profiles: ["templates"]
+    restart: "no"
+    env_file:
+      - ../env/env.common
+      - ../env/env.database
+      - ../env/env.redis
+      - ../env/env.production
+    environment:
+      - NODE_NAME=node-attendance
+    command: ["node","dist/workers/attendance.worker.js"]
+    depends_on:
+      - redis
+
+  worker-billing-2:
+    image: absenta-backend:latest
+    container_name: absenta-worker-billing-2
+    profiles: ["templates"]
+    restart: "no"
+    env_file:
+      - ../env/env.common
+      - ../env/env.database
+      - ../env/env.redis
+      - ../env/env.production
+    environment:
+      - NODE_NAME=node-billing
+    command: ["node","dist/workers/billing.worker.js"]
+    depends_on:
+      - redis
+
+  worker-notification-2:
+    image: absenta-backend:latest
+    container_name: absenta-worker-notification-2
+    profiles: ["templates"]
+    restart: "no"
+    env_file:
+      - ../env/env.common
+      - ../env/env.database
+      - ../env/env.redis
+      - ../env/env.production
+    environment:
+      - NODE_NAME=node-billing
+    command: ["node","dist/workers/notification.worker.js"]
+    depends_on:
+      - redis
+
 networks:
   default:
     name: absenta-net

@@ -1,7 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMPOSE_FILE="$DIR/docker-compose.linux.yml"
+COMPOSE_FILE="${COMPOSE_FILE:-$DIR/docker-compose.linux.yml}"
+if [ -z "${BACKEND_PATH:-}" ]; then
+  legacy_backend="$DIR/../../ProjekAbsenta/backend/absenta_backend"
+  sibling_backend="$DIR/../absenta_backend"
+  if [ -d "$legacy_backend" ]; then
+    BACKEND_PATH="$legacy_backend"
+  else
+    BACKEND_PATH="$sibling_backend"
+  fi
+fi
+BACKEND_REPO="${BACKEND_REPO:-https://github.com/sharemovie1993/absenta_backend.git}"
+BACKEND_BRANCH="${BACKEND_BRANCH:-master}"
+NO_CACHE="${NO_CACHE:-false}"
+RUN_MIGRATE="${RUN_MIGRATE:-true}"
+STACK_DOWN_FIRST="${STACK_DOWN_FIRST:-true}"
 
 # -----------------------------------------------------------------------------
 # Ensure dependencies (Ubuntu 22.x friendly). Skip if already installed.
@@ -28,6 +42,7 @@ ensure_prereqs() {
     apt_ensure curl
     apt_ensure gnupg
     apt_ensure lsb-release
+    apt_ensure git
   fi
 }
 
@@ -63,26 +78,58 @@ if ! docker info >/dev/null 2>&1; then
     DOCKER_BIN="sudo docker"
   fi
 fi
+
 max_wait=180
 waited=0
-until docker info >/dev/null 2>&1; do
 until $DOCKER_BIN info >/dev/null 2>&1; do
   waited=$((waited+5))
   if [ "$waited" -ge "$max_wait" ]; then
     echo "docker engine not ready"
-    break
+    exit 1
   fi
+  sleep 5
 done
-docker compose -f "$COMPOSE_FILE" down || true
-$DOCKER_BIN compose -f "$COMPOSE_FILE" down || true
-$DOCKER_BIN compose -f "$COMPOSE_FILE" build --no-cache
-$DOCKER_BIN compose -f "$COMPOSE_FILE" up -d --remove-orphans
-$DOCKER_BIN ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
+
+if [ ! -d "$BACKEND_PATH" ]; then
+  mkdir -p "$(dirname "$BACKEND_PATH")"
+  git clone --branch "$BACKEND_BRANCH" --depth 1 "$BACKEND_REPO" "$BACKEND_PATH"
+else
+  if [ -d "$BACKEND_PATH/.git" ]; then
+    git -C "$BACKEND_PATH" fetch --prune origin "$BACKEND_BRANCH"
+    git -C "$BACKEND_PATH" checkout "$BACKEND_BRANCH"
+    git -C "$BACKEND_PATH" pull --ff-only origin "$BACKEND_BRANCH"
+  fi
+fi
+
+export BACKEND_PATH
+$DOCKER_BIN compose -f "$COMPOSE_FILE" config >/dev/null
+
+if [ "$STACK_DOWN_FIRST" = "true" ]; then
+  $DOCKER_BIN compose -f "$COMPOSE_FILE" down || true
+fi
+
+build_args=()
+if [ "$NO_CACHE" = "true" ]; then
+  build_args+=(--no-cache)
+fi
+$DOCKER_BIN compose -f "$COMPOSE_FILE" build "${build_args[@]}"
 
 env_dir="$DIR/../env"
-tmp_env="/tmp/absenta-worker-env-node-attendance.env"
+tmp_env="/tmp/absenta-env.migrate.env"
+umask 077
 cat "$env_dir/env.common" "$env_dir/env.database" "$env_dir/env.redis" "$env_dir/env.production" > "$tmp_env" || true
-echo "NODE_NAME=node-attendance" >> "$tmp_env"
+
+if [ "$RUN_MIGRATE" = "true" ]; then
+  $DOCKER_BIN run --rm \
+    --env-file "$tmp_env" \
+    -v "$BACKEND_PATH:/app" \
+    -w /app \
+    node:20-bookworm-slim \
+    sh -lc "npm ci --no-audit --no-fund && npm run prisma:migrate:deploy"
+fi
+
+$DOCKER_BIN compose -f "$COMPOSE_FILE" up -d --remove-orphans
+$DOCKER_BIN ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
 
 ensure_standby() {
   local name="$1"
@@ -93,6 +140,7 @@ ensure_standby() {
     return 0
   fi
   local tmp="/tmp/absenta-worker-env-${node_name}.env"
+  umask 077
   cat "$env_dir/env.common" "$env_dir/env.database" "$env_dir/env.redis" "$env_dir/env.production" > "$tmp" || true
   echo "NODE_NAME=${node_name}" >> "$tmp"
   $DOCKER_BIN create --name "$name" --restart unless-stopped --network absenta-net --env-file "$tmp" absenta-backend:latest node "$script" >/dev/null 2>&1 || true
@@ -104,14 +152,14 @@ ensure_standby "absenta-worker-attendance-4" "node-attendance" "dist/workers/att
 ensure_standby "absenta-worker-billing-2" "node-billing" "dist/workers/billing.worker.js"
 ensure_standby "absenta-worker-notification-2" "node-billing" "dist/workers/notification.worker.js"
 exited="$($DOCKER_BIN ps -a --filter "status=exited" --format "{{.Names}}" || true)"
+if [ -n "$exited" ]; then
   for n in $exited; do
     echo "==== LOG: $n ===="
-    docker logs "$n" || true
     $DOCKER_BIN logs "$n" || true
+    echo "=================="
   done
 fi
 if command -v curl >/dev/null 2>&1; then
   curl -s -o /dev/null -w "health http %{http_code}\n" http://localhost:3001/health || true
 fi
-exit 0
 exit 0
