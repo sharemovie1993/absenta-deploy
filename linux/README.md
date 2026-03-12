@@ -46,6 +46,13 @@ export GITHUB_TOKEN="ghp_xxx"
 ./deploy-multinode.sh
 ```
 
+Jika token fine-grained Anda tetap ditolak, coba set username GitHub juga:
+
+```bash
+export GITHUB_USERNAME="USERNAME_GITHUB_ANDA"
+./deploy-multinode.sh
+```
+
 - **Paling mudah (tanpa export, simpan sekali di VPS)**:
 
 ```bash

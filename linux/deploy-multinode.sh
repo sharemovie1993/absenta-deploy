@@ -14,6 +14,7 @@ fi
 BACKEND_REPO="${BACKEND_REPO:-https://github.com/sharemovie1993/absenta_backend.git}"
 BACKEND_BRANCH="${BACKEND_BRANCH:-master}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+GITHUB_USERNAME="${GITHUB_USERNAME:-x-access-token}"
 NO_CACHE="${NO_CACHE:-false}"
 RUN_MIGRATE="${RUN_MIGRATE:-true}"
 STACK_DOWN_FIRST="${STACK_DOWN_FIRST:-true}"
@@ -75,6 +76,12 @@ ensure_docker
 # Never prompt for git username/password in non-interactive deploy
 export GIT_TERMINAL_PROMPT=0
 
+BACKEND_REPO="$(printf '%s' "$BACKEND_REPO" | tr -d '\r' | xargs)"
+BACKEND_REPO="${BACKEND_REPO//\`/}"
+BACKEND_REPO="${BACKEND_REPO//\"/}"
+BACKEND_REPO="${BACKEND_REPO//\'/}"
+BACKEND_REPO="${BACKEND_REPO%/}"
+
 if [ -z "$GITHUB_TOKEN" ]; then
   token_candidates=(
     "$DIR/../env/github.token"
@@ -124,7 +131,7 @@ if [ -n "$GITHUB_TOKEN" ] && [[ "$BACKEND_REPO" =~ ^https://github\.com/ ]]; the
     echo "base64 belum tersedia. Instal dulu: sudo apt-get update && sudo apt-get install -y coreutils"
     exit 1
   fi
-  basic="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
+  basic="$(printf '%s:%s' "$GITHUB_USERNAME" "$GITHUB_TOKEN" | base64 | tr -d '\n')"
   git_auth_args+=(-c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${basic}")
 fi
 
