@@ -28,6 +28,13 @@ DOMAIN="${DOMAIN:-}"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
 PUBLIC_APP_URL="${PUBLIC_APP_URL:-}"
 PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL:-}"
+HTTP_PORT="${HTTP_PORT:-}"
+HTTPS_PORT="${HTTPS_PORT:-}"
+DEPLOY_FRONTEND="${DEPLOY_FRONTEND:-true}"
+FRONTEND_REPO="${FRONTEND_REPO:-https://github.com/sharemovie1993/absenta_frontend.git}"
+FRONTEND_BRANCH="${FRONTEND_BRANCH:-master}"
+FRONTEND_PATH="${FRONTEND_PATH:-}"
+FRONTEND_IMAGE="${FRONTEND_IMAGE:-absenta-frontend:latest}"
 
 # -----------------------------------------------------------------------------
 # Ensure dependencies (Ubuntu 22.x friendly). Skip if already installed.
@@ -55,6 +62,8 @@ ensure_prereqs() {
     apt_ensure gnupg
     apt_ensure lsb-release
     apt_ensure git
+    apt_ensure iproute2
+    apt_ensure openssl
   fi
 }
 
@@ -159,6 +168,44 @@ until $DOCKER_BIN info >/dev/null 2>&1; do
   sleep 5
 done
 
+port_in_use() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq "(:|\\.)${port}\$" && return 0
+  fi
+  return 1
+}
+
+prompt_ports() {
+  if [ -z "${HTTP_PORT:-}" ]; then
+    HTTP_PORT="80"
+  fi
+  if [ -z "${HTTPS_PORT:-}" ]; then
+    HTTPS_PORT="443"
+  fi
+
+  if port_in_use "$HTTP_PORT" || port_in_use "$HTTPS_PORT"; then
+    echo "Port ${HTTP_PORT} atau ${HTTPS_PORT} sedang dipakai service lain."
+    echo "Pilih solusi:"
+    echo "  1) Stop nginx/apache di VPS (jika ada) lalu pakai 80/443"
+    echo "  2) Pakai port alternatif (misal 8080/8443)"
+    read -rp "Pilihan [1/2]: " psel
+    if [ "${psel:-}" = "1" ]; then
+      if command -v systemctl >/dev/null 2>&1; then
+        sudo systemctl stop nginx 2>/dev/null || true
+        sudo systemctl stop apache2 2>/dev/null || true
+        sudo systemctl stop httpd 2>/dev/null || true
+      fi
+    else
+      read -rp "HTTP_PORT [8080]: " HTTP_PORT
+      HTTP_PORT="${HTTP_PORT:-8080}"
+      read -rp "HTTPS_PORT [8443]: " HTTPS_PORT
+      HTTPS_PORT="${HTTPS_PORT:-8443}"
+    fi
+  fi
+  export HTTP_PORT HTTPS_PORT
+}
+
 run_non_deploy_action() {
   case "$ACTION" in
     status)
@@ -240,6 +287,11 @@ save_single_state() {
     echo "SSL_ENABLED=${SSL_ENABLED:-}"
     echo "PUBLIC_APP_URL=${PUBLIC_APP_URL:-}"
     echo "PUBLIC_INVOICE_BASE_URL=${PUBLIC_INVOICE_BASE_URL:-}"
+    echo "HTTP_PORT=${HTTP_PORT:-}"
+    echo "HTTPS_PORT=${HTTPS_PORT:-}"
+    echo "DEPLOY_FRONTEND=${DEPLOY_FRONTEND:-}"
+    echo "FRONTEND_REPO=${FRONTEND_REPO:-}"
+    echo "FRONTEND_BRANCH=${FRONTEND_BRANCH:-}"
   } > "$tmp_state"
   sudo mv "$tmp_state" "$SINGLE_STATE_FILE" >/dev/null 2>&1 || true
   sudo chmod 600 "$SINGLE_STATE_FILE" >/dev/null 2>&1 || true
@@ -260,6 +312,14 @@ save_multi_state() {
     echo "REDIS_URL=${REDIS_URL:-}"
     echo "PUBLIC_APP_URL=${PUBLIC_APP_URL:-}"
     echo "PUBLIC_INVOICE_BASE_URL=${PUBLIC_INVOICE_BASE_URL:-}"
+    echo "HTTP_PORT=${HTTP_PORT:-}"
+    echo "HTTPS_PORT=${HTTPS_PORT:-}"
+    echo "SSL_ENABLED=${SSL_ENABLED:-}"
+    echo "DOMAIN=${DOMAIN:-}"
+    echo "CERTBOT_EMAIL=${CERTBOT_EMAIL:-}"
+    echo "DEPLOY_FRONTEND=${DEPLOY_FRONTEND:-}"
+    echo "FRONTEND_REPO=${FRONTEND_REPO:-}"
+    echo "FRONTEND_BRANCH=${FRONTEND_BRANCH:-}"
   } > "$tmp_state"
   sudo mv "$tmp_state" "$MULTI_STATE_FILE" >/dev/null 2>&1 || true
   sudo chmod 600 "$MULTI_STATE_FILE" >/dev/null 2>&1 || true
@@ -267,6 +327,10 @@ save_multi_state() {
 
 load_single_state
 load_multi_state
+
+if [ -t 0 ] && [ -t 1 ]; then
+  prompt_ports
+fi
 
 if [ -z "$GITHUB_TOKEN" ]; then
   token_candidates=(
@@ -346,7 +410,7 @@ else
 fi
 
 prompt_ssl_single() {
-  if [ "$MODE" != "single" ]; then
+  if [ "$MODE" != "single" ] && [ "$MODE" != "multi" ]; then
     return 0
   fi
   if [ -z "$SSL_ENABLED" ]; then
@@ -357,6 +421,9 @@ prompt_ssl_single() {
     esac
   fi
   if [ "$SSL_ENABLED" = "true" ]; then
+    HTTP_PORT="80"
+    HTTPS_PORT="443"
+    prompt_ports
     if [ -z "$DOMAIN" ]; then
       read -rp "DOMAIN (contoh: api.absenta.id): " DOMAIN
       DOMAIN="$(printf '%s' "$DOMAIN" | tr -d '\r' | xargs)"
@@ -372,6 +439,35 @@ if [ -t 0 ] && [ -t 1 ]; then
   prompt_ssl_single
 fi
 
+prompt_frontend_repo() {
+  if [ "${DEPLOY_FRONTEND:-true}" != "true" ]; then
+    return 0
+  fi
+  local default_repo="${FRONTEND_REPO:-https://github.com/sharemovie1993/absenta_frontend.git}"
+  local default_branch="${FRONTEND_BRANCH:-master}"
+  read -rp "FRONTEND_REPO [${default_repo}]: " fr
+  if [ -n "${fr:-}" ]; then
+    FRONTEND_REPO="$fr"
+  else
+    FRONTEND_REPO="$default_repo"
+  fi
+  FRONTEND_REPO="$(printf '%s' "$FRONTEND_REPO" | tr -d '\r' | xargs)"
+  FRONTEND_REPO="${FRONTEND_REPO%/}"
+  read -rp "FRONTEND_BRANCH [${default_branch}]: " fb
+  if [ -n "${fb:-}" ]; then
+    FRONTEND_BRANCH="$fb"
+  else
+    FRONTEND_BRANCH="$default_branch"
+  fi
+  if [ -z "${FRONTEND_PATH:-}" ]; then
+    FRONTEND_PATH="$DIR/../absenta_frontend"
+  fi
+}
+
+if [ -t 0 ] && [ -t 1 ]; then
+  prompt_frontend_repo
+fi
+
 prompt_public_urls_single() {
   if [ "$MODE" != "single" ]; then
     return 0
@@ -380,12 +476,18 @@ prompt_public_urls_single() {
   if [ "$SSL_ENABLED" = "true" ]; then
     default_scheme="https"
   fi
-  local base_default=""
-  if [ -n "${DOMAIN:-}" ]; then
-    base_default="${default_scheme}://${DOMAIN}"
+  local host="${DOMAIN:-localhost}"
+  local port_part=""
+  if [ "$SSL_ENABLED" = "true" ]; then
+    if [ -n "${HTTPS_PORT:-}" ] && [ "$HTTPS_PORT" != "443" ]; then
+      port_part=":${HTTPS_PORT}"
+    fi
   else
-    base_default="${default_scheme}://localhost"
+    if [ -n "${HTTP_PORT:-}" ] && [ "$HTTP_PORT" != "80" ]; then
+      port_part=":${HTTP_PORT}"
+    fi
   fi
+  local base_default="${default_scheme}://${host}${port_part}"
   if [ -z "${PUBLIC_APP_URL:-}" ]; then
     read -rp "PUBLIC_APP_URL [${base_default}]: " PUBLIC_APP_URL
     PUBLIC_APP_URL="${PUBLIC_APP_URL:-$base_default}"
@@ -402,12 +504,39 @@ prompt_public_urls_multi() {
     return 0
   fi
   if [ -z "${PUBLIC_APP_URL:-}" ]; then
-    read -rp "PUBLIC_APP_URL (contoh: https://api.absenta.id): " PUBLIC_APP_URL
-    PUBLIC_APP_URL="$(printf '%s' "$PUBLIC_APP_URL" | tr -d '\r' | xargs)"
+    local default_scheme="http"
+    if [ "$SSL_ENABLED" = "true" ]; then
+      default_scheme="https"
+    fi
+    local host="${DOMAIN:-}"
+    local port_part=""
+    if [ -n "${host:-}" ]; then
+      if [ "$SSL_ENABLED" = "true" ]; then
+        if [ -n "${HTTPS_PORT:-}" ] && [ "$HTTPS_PORT" != "443" ]; then
+          port_part=":${HTTPS_PORT}"
+        fi
+      else
+        if [ -n "${HTTP_PORT:-}" ] && [ "$HTTP_PORT" != "80" ]; then
+          port_part=":${HTTP_PORT}"
+        fi
+      fi
+      local base_default="${default_scheme}://${host}${port_part}"
+      read -rp "PUBLIC_APP_URL [${base_default}]: " PUBLIC_APP_URL
+      PUBLIC_APP_URL="${PUBLIC_APP_URL:-$base_default}"
+    else
+      read -rp "PUBLIC_APP_URL (contoh: https://api.absenta.id): " PUBLIC_APP_URL
+      PUBLIC_APP_URL="$(printf '%s' "$PUBLIC_APP_URL" | tr -d '\r' | xargs)"
+    fi
   fi
   if [ -z "${PUBLIC_INVOICE_BASE_URL:-}" ]; then
-    read -rp "PUBLIC_INVOICE_BASE_URL (contoh: https://api.absenta.id): " PUBLIC_INVOICE_BASE_URL
-    PUBLIC_INVOICE_BASE_URL="$(printf '%s' "$PUBLIC_INVOICE_BASE_URL" | tr -d '\r' | xargs)"
+    local base_default="${PUBLIC_APP_URL:-}"
+    if [ -n "${base_default:-}" ]; then
+      read -rp "PUBLIC_INVOICE_BASE_URL [${base_default}]: " PUBLIC_INVOICE_BASE_URL
+      PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL:-$base_default}"
+    else
+      read -rp "PUBLIC_INVOICE_BASE_URL (contoh: https://api.absenta.id): " PUBLIC_INVOICE_BASE_URL
+      PUBLIC_INVOICE_BASE_URL="$(printf '%s' "$PUBLIC_INVOICE_BASE_URL" | tr -d '\r' | xargs)"
+    fi
   fi
   export PUBLIC_APP_URL PUBLIC_INVOICE_BASE_URL
 }
@@ -422,7 +551,7 @@ save_multi_state
 
 git_repo_url="$BACKEND_REPO"
 git_auth_args=()
-if [ -n "$GITHUB_TOKEN" ] && [[ "$BACKEND_REPO" =~ ^https://github\.com/ ]]; then
+if [ -n "$GITHUB_TOKEN" ]; then
   if ! is_cmd base64; then
     echo "base64 belum tersedia. Instal dulu: sudo apt-get update && sudo apt-get install -y coreutils"
     exit 1
@@ -471,6 +600,31 @@ else
   fi
 fi
 
+if [ "${DEPLOY_FRONTEND:-true}" = "true" ]; then
+  if [ -z "${FRONTEND_PATH:-}" ]; then
+    FRONTEND_PATH="$DIR/../absenta_frontend"
+  fi
+  FRONTEND_REPO="$(printf '%s' "$FRONTEND_REPO" | tr -d '\r' | xargs)"
+  FRONTEND_REPO="${FRONTEND_REPO//\`/}"
+  FRONTEND_REPO="${FRONTEND_REPO//\"/}"
+  FRONTEND_REPO="${FRONTEND_REPO//\'/}"
+  FRONTEND_REPO="${FRONTEND_REPO%/}"
+  mkdir -p "$(dirname "$FRONTEND_PATH")"
+  if [ ! -d "$FRONTEND_PATH" ]; then
+    git "${git_auth_args[@]}" clone --branch "$FRONTEND_BRANCH" --depth 1 "$FRONTEND_REPO" "$FRONTEND_PATH" || {
+      echo "Gagal clone repo frontend."
+      exit 1
+    }
+  else
+    if [ -d "$FRONTEND_PATH/.git" ]; then
+      git "${git_auth_args[@]}" -C "$FRONTEND_PATH" fetch --prune origin "$FRONTEND_BRANCH" || true
+      git -C "$FRONTEND_PATH" checkout "$FRONTEND_BRANCH" || true
+      git "${git_auth_args[@]}" -C "$FRONTEND_PATH" pull --ff-only origin "$FRONTEND_BRANCH" || true
+    fi
+  fi
+  export FRONTEND_PATH
+fi
+
 export BACKEND_PATH
 $DOCKER_BIN compose -f "$COMPOSE_FILE" config >/dev/null
 
@@ -483,6 +637,32 @@ if [ "$NO_CACHE" = "true" ]; then
   build_args+=(--no-cache)
 fi
 $DOCKER_BIN compose -f "$COMPOSE_FILE" build "${build_args[@]}"
+
+if [ "${DEPLOY_FRONTEND:-true}" = "true" ]; then
+  vite_api="${PUBLIC_APP_URL%/}/api"
+  socket_scheme="ws"
+  socket_port="${HTTP_PORT:-80}"
+  if [ "$SSL_ENABLED" = "true" ]; then
+    socket_scheme="wss"
+    socket_port="${HTTPS_PORT:-443}"
+  fi
+  socket_host="${DOMAIN:-localhost}"
+  socket_port_part=""
+  if [ "$socket_scheme" = "wss" ]; then
+    if [ -n "${socket_port:-}" ] && [ "$socket_port" != "443" ]; then
+      socket_port_part=":${socket_port}"
+    fi
+  else
+    if [ -n "${socket_port:-}" ] && [ "$socket_port" != "80" ]; then
+      socket_port_part=":${socket_port}"
+    fi
+  fi
+  vite_socket="${socket_scheme}://${socket_host}${socket_port_part}"
+  $DOCKER_BIN build -t "$FRONTEND_IMAGE" -f "$DIR/frontend/Dockerfile" \
+    --build-arg VITE_API_BASE_URL="$vite_api" \
+    --build-arg VITE_SOCKET_URL="$vite_socket" \
+    "$FRONTEND_PATH" "${build_args[@]}"
+fi
 
 env_dir="$DIR/../env"
 tmp_env="/tmp/absenta-env.migrate.env"
@@ -519,7 +699,10 @@ $DOCKER_BIN compose -f "$COMPOSE_FILE" up -d --remove-orphans
 $DOCKER_BIN ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
 
 setup_ssl_cron_single() {
-  if [ "$MODE" != "single" ] || [ "$SSL_ENABLED" != "true" ]; then
+  if [ "$MODE" != "single" ] && [ "$MODE" != "multi" ]; then
+    return 0
+  fi
+  if [ "$SSL_ENABLED" != "true" ]; then
     return 0
   fi
   if ! is_cmd sudo; then
@@ -572,7 +755,7 @@ EOF
   sudo systemctl enable --now cron >/dev/null 2>&1 || true
 }
 
-if [ "$MODE" = "single" ] && [ "$SSL_ENABLED" = "true" ]; then
+if [ "$SSL_ENABLED" = "true" ]; then
   setup_ssl_cron_single || true
 fi
 

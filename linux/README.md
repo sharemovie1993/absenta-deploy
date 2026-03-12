@@ -88,6 +88,12 @@ File compose yang dipakai:
 - Single: `docker-compose.linux.single.yml`
 - Multi: `docker-compose.linux.multi.yml`
 
+## Frontend (container)
+- Frontend ikut di-deploy sebagai container dan di-proxy oleh nginx.
+- Routing nginx:
+  - `/api/*` dan `/socket.io/*` ke backend
+  - selain itu ke frontend (SPA)
+
 ## Domain + SSL (Single instance)
 - Saat mode **single**, script akan menawarkan setup domain + HTTPS.
 - Jika Anda pilih aktif, script akan:
