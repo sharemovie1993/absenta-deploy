@@ -75,6 +75,20 @@ ensure_docker
 # Never prompt for git username/password in non-interactive deploy
 export GIT_TERMINAL_PROMPT=0
 
+if [ -z "$GITHUB_TOKEN" ]; then
+  token_candidates=(
+    "$DIR/../env/github.token"
+    "$HOME/.config/absenta/github.token"
+    "/etc/absenta/github.token"
+  )
+  for f in "${token_candidates[@]}"; do
+    if [ -f "$f" ]; then
+      GITHUB_TOKEN="$(tr -d '\r\n ' < "$f" || true)"
+      break
+    fi
+  done
+fi
+
 # Use sudo for docker if current user lacks access to Docker daemon
 DOCKER_BIN="docker"
 if ! docker info >/dev/null 2>&1; then
@@ -116,8 +130,16 @@ if [ ! -d "$BACKEND_PATH" ]; then
   else
     git clone --branch "$BACKEND_BRANCH" --depth 1 "$git_repo_url" "$BACKEND_PATH" || {
       echo "Gagal clone repo backend (HTTPS)."
-      echo "- Jika repo private: set GITHUB_TOKEN (PAT) sebelum menjalankan deploy."
-      echo "- Atau gunakan BACKEND_REPO=git@github.com:... dengan SSH deploy key."
+      echo ""
+      echo "Cara paling mudah untuk repo PRIVATE:"
+      echo "1) Buat GitHub Token (PAT) dengan akses repo (read)."
+      echo "2) Simpan token di VPS (sekali saja):"
+      echo "   sudo mkdir -p /etc/absenta"
+      echo "   sudo sh -lc 'echo \"TOKEN_ANDA\" > /etc/absenta/github.token'"
+      echo "   sudo chmod 600 /etc/absenta/github.token"
+      echo "3) Jalankan lagi: bash deploy-multinode.sh"
+      echo ""
+      echo "Alternatif: export GITHUB_TOKEN=TOKEN_ANDA lalu jalankan script."
       exit 1
     }
   fi

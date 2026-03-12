@@ -40,6 +40,15 @@ export GITHUB_TOKEN="ghp_xxx"
 ./deploy-multinode.sh
 ```
 
+- **Paling mudah (tanpa export, simpan sekali di VPS)**:
+
+```bash
+sudo mkdir -p /etc/absenta
+sudo sh -lc 'echo "ghp_xxx" > /etc/absenta/github.token'
+sudo chmod 600 /etc/absenta/github.token
+./deploy-multinode.sh
+```
+
 - **Pakai SSH deploy key (lebih aman untuk server)**:
   - Set `BACKEND_REPO` ke SSH:
 
