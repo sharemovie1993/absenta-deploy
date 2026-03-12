@@ -1,0 +1,127 @@
+services:
+  backend-api:
+    build:
+      context: ${BACKEND_PATH:-../../ProjekAbsenta/backend/absenta_backend}
+      dockerfile: Dockerfile
+    image: absenta-backend:latest
+    container_name: absenta-backend-api
+    restart: unless-stopped
+    env_file:
+      - ../env/env.common
+      - ../env/env.payment
+      - ../env/env.email
+      - ../env/env.production
+    environment:
+      NODE_NAME: node-api
+      EMBEDDED_WORKERS: "false"
+      PM2_DISABLED: "true"
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+    ports:
+      - "3001:3001"
+
+  worker-infra:
+    image: absenta-backend:latest
+    container_name: absenta-worker-infra
+    restart: unless-stopped
+    env_file:
+      - ../env/env.common
+      - ../env/env.production
+    environment:
+      NODE_NAME: node-api
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+    command: ["node","dist/workers/infra.worker.js"]
+
+  worker-billing:
+    image: absenta-backend:latest
+    container_name: absenta-worker-billing
+    restart: unless-stopped
+    env_file:
+      - ../env/env.common
+      - ../env/env.production
+    environment:
+      NODE_NAME: node-billing
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+    command: ["node","dist/workers/billing.worker.js"]
+
+  worker-notification:
+    image: absenta-backend:latest
+    container_name: absenta-worker-notification
+    restart: unless-stopped
+    env_file:
+      - ../env/env.common
+      - ../env/env.production
+    environment:
+      NODE_NAME: node-billing
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+    command: ["node","dist/workers/notification.worker.js"]
+
+  worker-attendance:
+    image: absenta-backend:latest
+    container_name: absenta-worker-attendance
+    restart: unless-stopped
+    env_file:
+      - ../env/env.common
+      - ../env/env.production
+    environment:
+      NODE_NAME: node-attendance
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+    command: ["node","dist/workers/attendance.worker.js"]
+
+  worker-analytics:
+    image: absenta-backend:latest
+    container_name: absenta-worker-analytics
+    restart: unless-stopped
+    env_file:
+      - ../env/env.common
+      - ../env/env.production
+    environment:
+      NODE_NAME: node-attendance
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+    command: ["node","dist/workers/analytics.worker.js"]
+
+  worker-maintenance:
+    image: absenta-backend:latest
+    container_name: absenta-worker-maintenance
+    restart: unless-stopped
+    env_file:
+      - ../env/env.common
+      - ../env/env.production
+    environment:
+      NODE_NAME: node-attendance
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+    command: ["node","dist/workers/maintenance.worker.js"]
+
+  worker-agent:
+    image: absenta-backend:latest
+    container_name: absenta-worker-agent
+    restart: unless-stopped
+    env_file:
+      - ../env/env.common
+      - ../env/env.production
+    environment:
+      NODE_NAME: worker-agent
+      AGENT_HANDLE_ALL_NODES: "true"
+      AGENT_MAX_INSTANCES: "10"
+      REDIS_URL: ${REDIS_URL}
+      CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["node","dist/infra/control-agent.js"]
+
+networks:
+  default:
+    name: absenta-net

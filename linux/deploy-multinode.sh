@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMPOSE_FILE="${COMPOSE_FILE:-$DIR/docker-compose.linux.yml}"
+MODE="${MODE:-}"
+COMPOSE_FILE="${COMPOSE_FILE:-}"
 if [ -z "${BACKEND_PATH:-}" ]; then
   legacy_backend="$DIR/../../ProjekAbsenta/backend/absenta_backend"
   sibling_backend="$DIR/../absenta_backend"
@@ -18,6 +19,7 @@ GITHUB_USERNAME="${GITHUB_USERNAME:-x-access-token}"
 NO_CACHE="${NO_CACHE:-false}"
 RUN_MIGRATE="${RUN_MIGRATE:-true}"
 STACK_DOWN_FIRST="${STACK_DOWN_FIRST:-true}"
+MIGRATE_IMAGE="${MIGRATE_IMAGE:-absenta-backend-migrate:latest}"
 
 # -----------------------------------------------------------------------------
 # Ensure dependencies (Ubuntu 22.x friendly). Skip if already installed.
@@ -82,6 +84,33 @@ BACKEND_REPO="${BACKEND_REPO//\"/}"
 BACKEND_REPO="${BACKEND_REPO//\'/}"
 BACKEND_REPO="${BACKEND_REPO%/}"
 
+if [ -z "$MODE" ]; then
+  if [ -t 0 ] && [ -t 1 ]; then
+    echo "Pilih mode deploy:"
+    echo "  1) Single instance (nginx + postgresql + redis + api + workers) di 1 mesin"
+    echo "  2) Multi instance (postgresql external + redis external, api + workers di mesin ini)"
+    echo "  3) Custom (gunakan COMPOSE_FILE yang Anda set sendiri)"
+    read -rp "Pilihan [1/2/3]: " choice
+    case "${choice:-}" in
+      1) MODE="single" ;;
+      2) MODE="multi" ;;
+      3) MODE="custom" ;;
+      *) MODE="multi" ;;
+    esac
+  else
+    MODE="multi"
+  fi
+fi
+
+if [ -z "$COMPOSE_FILE" ]; then
+  case "$MODE" in
+    single) COMPOSE_FILE="$DIR/docker-compose.linux.single.yml" ;;
+    multi) COMPOSE_FILE="$DIR/docker-compose.linux.multi.yml" ;;
+    custom) COMPOSE_FILE="$DIR/docker-compose.linux.yml" ;;
+    *) COMPOSE_FILE="$DIR/docker-compose.linux.multi.yml" ;;
+  esac
+fi
+
 if [ -z "$GITHUB_TOKEN" ]; then
   token_candidates=(
     "$DIR/../env/github.token"
@@ -103,6 +132,56 @@ if [ -z "$GITHUB_TOKEN" ]; then
       echo ""
     fi
   fi
+fi
+
+prompt_db_redis() {
+  if [ "$MODE" = "single" ]; then
+    if [ -z "${POSTGRES_DB:-}" ]; then
+      read -rp "POSTGRES_DB [absensi]: " POSTGRES_DB
+      POSTGRES_DB="${POSTGRES_DB:-absensi}"
+    fi
+    if [ -z "${POSTGRES_USER:-}" ]; then
+      read -rp "POSTGRES_USER [postgres]: " POSTGRES_USER
+      POSTGRES_USER="${POSTGRES_USER:-postgres}"
+    fi
+    if [ -z "${POSTGRES_PASSWORD:-}" ]; then
+      read -rsp "POSTGRES_PASSWORD (tidak akan tampil): " POSTGRES_PASSWORD
+      echo ""
+      if [ -z "$POSTGRES_PASSWORD" ]; then
+        POSTGRES_PASSWORD="change-me"
+      fi
+    fi
+    if [ -z "${DATABASE_URL:-}" ]; then
+      DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+    fi
+    if [ -z "${REDIS_URL:-}" ]; then
+      REDIS_URL="redis://redis:6379"
+    fi
+  else
+    if [ -z "${DATABASE_URL:-}" ]; then
+      read -rp "DB_HOST (contoh: 10.10.10.250): " DB_HOST
+      read -rp "DB_PORT [5432]: " DB_PORT
+      DB_PORT="${DB_PORT:-5432}"
+      read -rp "DB_NAME [absensi]: " DB_NAME
+      DB_NAME="${DB_NAME:-absensi}"
+      read -rp "DB_USER [postgres]: " DB_USER
+      DB_USER="${DB_USER:-postgres}"
+      read -rsp "DB_PASSWORD (tidak akan tampil): " DB_PASSWORD
+      echo ""
+      DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+    fi
+    if [ -z "${REDIS_URL:-}" ]; then
+      read -rp "REDIS_URL (contoh: redis://10.10.10.250:6379): " REDIS_URL
+    fi
+  fi
+  export DATABASE_URL REDIS_URL POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD
+}
+
+if [ -t 0 ] && [ -t 1 ]; then
+  prompt_db_redis
+else
+  : "${DATABASE_URL:=}"
+  : "${REDIS_URL:=}"
 fi
 
 # Use sudo for docker if current user lacks access to Docker daemon
@@ -194,12 +273,25 @@ umask 077
 cat "$env_dir/env.common" "$env_dir/env.database" "$env_dir/env.redis" "$env_dir/env.production" > "$tmp_env" || true
 
 if [ "$RUN_MIGRATE" = "true" ]; then
+  if [ "$MODE" = "single" ]; then
+    $DOCKER_BIN compose -f "$COMPOSE_FILE" up -d postgres redis
+    max_pg_wait=180
+    waited_pg=0
+    until $DOCKER_BIN exec absenta-postgres pg_isready -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-absensi}" >/dev/null 2>&1; do
+      waited_pg=$((waited_pg+5))
+      if [ "$waited_pg" -ge "$max_pg_wait" ]; then
+        echo "PostgreSQL belum siap"
+        break
+      fi
+      sleep 5
+    done
+  fi
+  $DOCKER_BIN build -t "$MIGRATE_IMAGE" --target build "$BACKEND_PATH" "${build_args[@]}"
   $DOCKER_BIN run --rm \
     --env-file "$tmp_env" \
-    -v "$BACKEND_PATH:/app" \
-    -w /app \
-    node:20-bookworm-slim \
-    sh -lc "npm ci --no-audit --no-fund && npm run prisma:migrate:deploy"
+    -e DATABASE_URL="$DATABASE_URL" \
+    "$MIGRATE_IMAGE" \
+    sh -lc "npx prisma migrate deploy"
 fi
 
 $DOCKER_BIN compose -f "$COMPOSE_FILE" up -d --remove-orphans

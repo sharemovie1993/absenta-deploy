@@ -78,6 +78,15 @@ cd absenta-deploy/linux
 COMPOSE_FILE="$PWD/docker-compose.linux.external-redis.yml" ./deploy-multinode.sh
 ```
 
+## Mode deploy (pilih sebelum eksekusi)
+Saat menjalankan `deploy-multinode.sh`, Anda akan diminta memilih:
+- **Single instance**: nginx + postgresql + redis + api + workers di 1 mesin
+- **Multi instance**: postgresql external + redis external, api + workers di mesin ini
+
+File compose yang dipakai:
+- Single: `docker-compose.linux.single.yml`
+- Multi: `docker-compose.linux.multi.yml`
+
 ## Override lokasi source backend
 Default script akan:
 - pakai path legacy jika ada: `../../ProjekAbsenta/backend/absenta_backend`
@@ -91,7 +100,7 @@ BACKEND_PATH=/opt/absenta/absenta_backend ./deploy-multinode.sh
 
 ## Migrate DB (Prisma)
 Default `deploy-multinode.sh` menjalankan migrate otomatis via container Node:
-- `npm run prisma:migrate:deploy`
+- `npx prisma migrate deploy` (dijalankan dari image `absenta-backend-migrate:latest`, tanpa install npm ulang)
 
 Untuk mematikan migrate:
 

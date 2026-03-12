@@ -1,0 +1,204 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: absenta-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-absensi}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - absenta_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    container_name: absenta-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - absenta_redisdata:/data
+
+  backend-api:
+    build:
+      context: ${BACKEND_PATH:-../../ProjekAbsenta/backend/absenta_backend}
+      dockerfile: Dockerfile
+    image: absenta-backend:latest
+    container_name: absenta-backend-api
+    restart: unless-stopped
+    env_file:
+      - ../env/env.common
+      - ../env/env.payment
+      - ../env/env.email
+      - ../env/env.production
+    environment:
+      NODE_NAME: node-api
+      EMBEDDED_WORKERS: "false"
+      PM2_DISABLED: "true"
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "3001:3001"
+
+  worker-infra:
+    image: absenta-backend:latest
+    container_name: absenta-worker-infra
+    restart: unless-stopped
+    env_file:
+      - ../env/env.common
+      - ../env/env.production
+    environment:
+      NODE_NAME: node-api
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+    command: ["node","dist/workers/infra.worker.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker-billing:
+    image: absenta-backend:latest
+    container_name: absenta-worker-billing
+    restart: unless-stopped
+    env_file:
+      - ../env/env.common
+      - ../env/env.production
+    environment:
+      NODE_NAME: node-billing
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+    command: ["node","dist/workers/billing.worker.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker-notification:
+    image: absenta-backend:latest
+    container_name: absenta-worker-notification
+    restart: unless-stopped
+    env_file:
+      - ../env/env.common
+      - ../env/env.production
+    environment:
+      NODE_NAME: node-billing
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+    command: ["node","dist/workers/notification.worker.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker-attendance:
+    image: absenta-backend:latest
+    container_name: absenta-worker-attendance
+    restart: unless-stopped
+    env_file:
+      - ../env/env.common
+      - ../env/env.production
+    environment:
+      NODE_NAME: node-attendance
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+    command: ["node","dist/workers/attendance.worker.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker-analytics:
+    image: absenta-backend:latest
+    container_name: absenta-worker-analytics
+    restart: unless-stopped
+    env_file:
+      - ../env/env.common
+      - ../env/env.production
+    environment:
+      NODE_NAME: node-attendance
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+    command: ["node","dist/workers/analytics.worker.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker-maintenance:
+    image: absenta-backend:latest
+    container_name: absenta-worker-maintenance
+    restart: unless-stopped
+    env_file:
+      - ../env/env.common
+      - ../env/env.production
+    environment:
+      NODE_NAME: node-attendance
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+    command: ["node","dist/workers/maintenance.worker.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker-agent:
+    image: absenta-backend:latest
+    container_name: absenta-worker-agent
+    restart: unless-stopped
+    env_file:
+      - ../env/env.common
+      - ../env/env.production
+    environment:
+      NODE_NAME: worker-agent
+      AGENT_HANDLE_ALL_NODES: "true"
+      AGENT_MAX_INSTANCES: "10"
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["node","dist/infra/control-agent.js"]
+    depends_on:
+      redis:
+        condition: service_started
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: absenta-nginx
+    restart: unless-stopped
+    depends_on:
+      - backend-api
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+
+networks:
+  default:
+    name: absenta-net
+
+volumes:
+  absenta_pgdata:
+  absenta_redisdata:
