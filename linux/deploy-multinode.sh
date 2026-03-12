@@ -415,33 +415,18 @@ if [ -t 0 ] && [ -t 1 ]; then
   prompt_ports
 fi
 
-GITHUB_TOKEN_ENV_FILE="${GITHUB_TOKEN_ENV_FILE:-$DIR/../env/.env.tokengit}"
-
-save_github_token_file() {
-  local token="$1"
-  local username="${2:-x-access-token}"
-  if [ -z "${token:-}" ]; then
-    return 0
+prompt_github_token() {
+  if [ -z "${GITHUB_USERNAME:-}" ]; then
+    GITHUB_USERNAME="x-access-token"
   fi
-  mkdir -p "$(dirname "$GITHUB_TOKEN_ENV_FILE")" >/dev/null 2>&1 || true
-  local tmp="/tmp/absenta-github-token.env.$$"
-  umask 077
-  {
-    echo "GITHUB_USERNAME=${username}"
-    echo "GITHUB_TOKEN=${token}"
-  } > "$tmp"
-  mv "$tmp" "$GITHUB_TOKEN_ENV_FILE" >/dev/null 2>&1 || true
-  chmod 600 "$GITHUB_TOKEN_ENV_FILE" >/dev/null 2>&1 || true
-}
-
-github_repo_is_https_github() {
-  local r="$1"
-  [[ "$r" =~ ^https://github\.com/ ]]
-}
-
-git_repo_accessible_without_token() {
-  local r="$1"
-  git ls-remote "$r" HEAD >/dev/null 2>&1
+  if [ -t 0 ] && [ -t 1 ]; then
+    read -rsp "Masukkan GitHub Token (boleh kosong untuk repo publik): " GITHUB_TOKEN
+    echo ""
+    GITHUB_TOKEN="$(printf '%s' "${GITHUB_TOKEN:-}" | tr -d '\r' | xargs)"
+  else
+    : "${GITHUB_TOKEN:=}"
+  fi
+  export GITHUB_USERNAME GITHUB_TOKEN
 }
 
 build_git_auth_args() {
@@ -458,146 +443,7 @@ build_git_auth_args() {
   basic="$(printf '%s:%s' "${username:-x-access-token}" "$token" | base64 | tr -d '\n')"
   git_auth_args+=(-c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${basic}")
 }
-
-classify_git_lsremote_error() {
-  local raw="$1"
-  local s
-  s="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')"
-  if echo "$s" | grep -Eq "(^|[[:space:]])(refs/|[0-9a-f]{7,40}[[:space:]])"; then
-    echo "OK"
-    return 0
-  fi
-  if echo "$s" | grep -Eq "authentication failed|http basic: access denied|invalid username or password|repository not found|fatal: could not read username|password authentication was removed|permission to .* denied"; then
-    echo "AUTH"
-    return 0
-  fi
-  if echo "$s" | grep -Eq "could not resolve host|temporary failure in name resolution|failed to connect|connection timed out|connection reset|network is unreachable|couldn't connect to server|tls|ssl|certificate"; then
-    echo "NETWORK"
-    return 0
-  fi
-  echo "OTHER"
-}
-
-github_token_works_for_repo() {
-  local repo="$1"
-  local token="$2"
-  local username="$3"
-  git_auth_args=()
-  build_git_auth_args "$token" "$username"
-  if [ "${#git_auth_args[@]}" -eq 0 ]; then
-    return 1
-  fi
-  git "${git_auth_args[@]}" ls-remote "$repo" HEAD >/dev/null 2>&1
-}
-
-if [ -z "${GITHUB_USERNAME:-}" ]; then
-  GITHUB_USERNAME="x-access-token"
-fi
-
-if [ -z "$GITHUB_TOKEN" ]; then
-  if [ -f "$GITHUB_TOKEN_ENV_FILE" ]; then
-    tokLine="$(grep -E '^[[:space:]]*GITHUB_TOKEN=' "$GITHUB_TOKEN_ENV_FILE" | tail -n 1 || true)"
-    if [ -n "${tokLine:-}" ]; then
-      GITHUB_TOKEN="${tokLine#*=}"
-    else
-      GITHUB_TOKEN="$(grep -E '^[[:space:]]*[^#;[:space:]]' "$GITHUB_TOKEN_ENV_FILE" | head -n 1 || true)"
-    fi
-    userLine="$(grep -E '^[[:space:]]*GITHUB_USERNAME=' "$GITHUB_TOKEN_ENV_FILE" | tail -n 1 || true)"
-    if [ -n "${userLine:-}" ]; then
-      GITHUB_USERNAME="${userLine#*=}"
-    fi
-    GITHUB_TOKEN="$(printf '%s' "$GITHUB_TOKEN" | tr -d '\r' | xargs)"
-    GITHUB_TOKEN="${GITHUB_TOKEN#\"}"; GITHUB_TOKEN="${GITHUB_TOKEN%\"}"
-    GITHUB_TOKEN="${GITHUB_TOKEN#\'}"; GITHUB_TOKEN="${GITHUB_TOKEN%\'}"
-    GITHUB_USERNAME="$(printf '%s' "$GITHUB_USERNAME" | tr -d '\r' | xargs)"
-    GITHUB_USERNAME="${GITHUB_USERNAME#\"}"; GITHUB_USERNAME="${GITHUB_USERNAME%\"}"
-    GITHUB_USERNAME="${GITHUB_USERNAME#\'}"; GITHUB_USERNAME="${GITHUB_USERNAME%\'}"
-  fi
-fi
-
-needs_github_token="false"
-required_repos=()
-if github_repo_is_https_github "$BACKEND_REPO"; then
-  if ! git_repo_accessible_without_token "$BACKEND_REPO"; then
-    required_repos+=("$BACKEND_REPO")
-  fi
-fi
-if [ "${DEPLOY_FRONTEND:-true}" = "true" ] && github_repo_is_https_github "${FRONTEND_REPO:-}"; then
-  if ! git_repo_accessible_without_token "$FRONTEND_REPO"; then
-    required_repos+=("$FRONTEND_REPO")
-  fi
-fi
-if [ "${#required_repos[@]}" -gt 0 ]; then
-  needs_github_token="true"
-fi
-
-if [ "$needs_github_token" = "true" ]; then
-  if [ -n "${GITHUB_TOKEN:-}" ]; then
-    all_ok="true"
-    for r in "${required_repos[@]}"; do
-      if ! github_token_works_for_repo "$r" "$GITHUB_TOKEN" "$GITHUB_USERNAME"; then
-        all_ok="false"
-        break
-      fi
-    done
-    if [ "$all_ok" != "true" ]; then
-      GITHUB_TOKEN=""
-    fi
-  fi
-  if [ -z "${GITHUB_TOKEN:-}" ]; then
-    if [ -t 0 ] && [ -t 1 ]; then
-      while true; do
-        read -rsp "Masukkan GitHub Token (tidak akan tampil): " GITHUB_TOKEN
-        echo ""
-        GITHUB_TOKEN="$(printf '%s' "$GITHUB_TOKEN" | tr -d '\r' | xargs)"
-        if [ -z "${GITHUB_TOKEN:-}" ]; then
-          echo "Token kosong."
-          continue
-        fi
-        err_all=""
-        ok_all="true"
-        for r in "${required_repos[@]}"; do
-          git_auth_args=()
-          build_git_auth_args "$GITHUB_TOKEN" "$GITHUB_USERNAME"
-          out="$(git "${git_auth_args[@]}" ls-remote "$r" HEAD 2>&1 || true)"
-          kind="$(classify_git_lsremote_error "$out")"
-          if [ "$kind" != "OK" ]; then
-            ok_all="false"
-            err_all="$out"
-            err_kind="$kind"
-            err_repo="$r"
-            break
-          fi
-        done
-        if [ "$ok_all" = "true" ]; then
-          save_github_token_file "$GITHUB_TOKEN" "$GITHUB_USERNAME"
-          break
-        fi
-        if [ "${err_kind:-}" = "NETWORK" ]; then
-          echo "Tidak bisa mengakses GitHub dari server (masalah jaringan/DNS/TLS), jadi token akan selalu dianggap gagal."
-          echo "Repo: ${err_repo:-}"
-          echo "Detail:"
-          echo "$err_all" | tail -n 8
-          exit 1
-        fi
-        if [ "${err_kind:-}" = "OTHER" ]; then
-          echo "Gagal akses repo saat cek token (bukan masalah token)."
-          echo "Repo: ${err_repo:-}"
-          echo "Detail:"
-          echo "$err_all" | tail -n 8
-          exit 1
-        fi
-        echo "Token tidak valid / tidak punya akses ke repo ini."
-        echo "Repo: ${err_repo:-}"
-        echo "Jika PAT Classic: pastikan scope repo (minimal Read). Jika Fine-grained: pastikan repo ini diizinkan."
-        GITHUB_TOKEN=""
-      done
-    else
-      echo "Repo memerlukan GitHub Token, namun deploy berjalan non-interaktif."
-      exit 1
-    fi
-  fi
-fi
+prompt_github_token
 
 prompt_db_redis() {
   if [ "$MODE" = "single" ]; then
@@ -846,7 +692,6 @@ if [ ! -d "$BACKEND_PATH" ]; then
       echo "1) Buat GitHub Token (PAT) dengan akses repo (read)."
       echo "2) Jalankan deploy lalu masukkan token saat diminta (input disembunyikan)."
       echo ""
-      echo "Alternatif: simpan token sekali di $DIR/../env/.env.tokengit"
       exit 1
     }
   fi
