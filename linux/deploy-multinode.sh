@@ -24,6 +24,7 @@ STACK_DOWN_FIRST="${STACK_DOWN_FIRST:-true}"
 MIGRATE_IMAGE="${MIGRATE_IMAGE:-absenta-backend-migrate:latest}"
 SINGLE_STATE_FILE="${SINGLE_STATE_FILE:-/etc/absenta/single.env}"
 MULTI_STATE_FILE="${MULTI_STATE_FILE:-/etc/absenta/multi.env}"
+TOKEN_GIT_ENV_FILE="${TOKEN_GIT_ENV_FILE:-/etc/absenta/tokengit.env}"
 SSL_ENABLED="${SSL_ENABLED:-}"
 DOMAIN="${DOMAIN:-}"
 MAIN_DOMAIN="${MAIN_DOMAIN:-}"
@@ -280,9 +281,9 @@ run_non_deploy_action() {
       $DOCKER_BIN network rm absenta-net >/dev/null 2>&1 || true
 
       if is_cmd sudo; then
-        sudo rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/github.token /etc/cron.d/absenta-certbot >/dev/null 2>&1 || true
+        sudo rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/github.token /etc/absenta/tokengit.env /etc/cron.d/absenta-certbot >/dev/null 2>&1 || true
       else
-        rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/github.token /etc/cron.d/absenta-certbot >/dev/null 2>&1 || true
+        rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/github.token /etc/absenta/tokengit.env /etc/cron.d/absenta-certbot >/dev/null 2>&1 || true
       fi
       rm -f "$DIR/../env/.env.tokengit" >/dev/null 2>&1 || true
 
@@ -419,12 +420,23 @@ prompt_github_token() {
   if [ -z "${GITHUB_USERNAME:-}" ]; then
     GITHUB_USERNAME="x-access-token"
   fi
-  if [ -t 0 ] && [ -t 1 ]; then
-    read -rsp "Masukkan GitHub Token (boleh kosong untuk repo publik): " GITHUB_TOKEN
-    echo ""
-    GITHUB_TOKEN="$(printf '%s' "${GITHUB_TOKEN:-}" | tr -d '\r' | xargs)"
-  else
-    : "${GITHUB_TOKEN:=}"
+  if [ -z "${GITHUB_TOKEN:-}" ] && [ -f "${TOKEN_GIT_ENV_FILE:-}" ]; then
+    tokLine="$(grep -E '^[[:space:]]*TOKEN_GIT=' "$TOKEN_GIT_ENV_FILE" | tail -n 1 || true)"
+    if [ -n "${tokLine:-}" ]; then
+      GITHUB_TOKEN="${tokLine#*=}"
+      GITHUB_TOKEN="$(printf '%s' "$GITHUB_TOKEN" | tr -d '\r' | xargs)"
+      GITHUB_TOKEN="${GITHUB_TOKEN#\"}"; GITHUB_TOKEN="${GITHUB_TOKEN%\"}"
+      GITHUB_TOKEN="${GITHUB_TOKEN#\'}"; GITHUB_TOKEN="${GITHUB_TOKEN%\'}"
+    fi
+  fi
+  if [ -z "${GITHUB_TOKEN:-}" ]; then
+    if [ -t 0 ] && [ -t 1 ]; then
+      read -rsp "Masukkan GitHub Token (boleh kosong untuk repo publik): " GITHUB_TOKEN
+      echo ""
+      GITHUB_TOKEN="$(printf '%s' "${GITHUB_TOKEN:-}" | tr -d '\r' | xargs)"
+    else
+      : "${GITHUB_TOKEN:=}"
+    fi
   fi
   export GITHUB_USERNAME GITHUB_TOKEN
 }
