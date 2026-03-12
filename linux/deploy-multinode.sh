@@ -323,6 +323,14 @@ load_single_state() {
   MAIN_DOMAIN="${MAIN_DOMAIN//\"/}"
   MAIN_DOMAIN="${MAIN_DOMAIN//\'/}"
   MAIN_DOMAIN="$(printf '%s' "$MAIN_DOMAIN" | tr -d '\r' | xargs)"
+  GITHUB_USERNAME="${GITHUB_USERNAME//\`/}"
+  GITHUB_USERNAME="${GITHUB_USERNAME//\"/}"
+  GITHUB_USERNAME="${GITHUB_USERNAME//\'/}"
+  GITHUB_USERNAME="$(printf '%s' "$GITHUB_USERNAME" | tr -d '\r' | xargs)"
+  GITHUB_TOKEN="${GITHUB_TOKEN//\`/}"
+  GITHUB_TOKEN="${GITHUB_TOKEN//\"/}"
+  GITHUB_TOKEN="${GITHUB_TOKEN//\'/}"
+  GITHUB_TOKEN="$(printf '%s' "$GITHUB_TOKEN" | tr -d '\r' | xargs)"
 }
 
 load_multi_state() {
@@ -346,6 +354,14 @@ load_multi_state() {
   MAIN_DOMAIN="${MAIN_DOMAIN//\"/}"
   MAIN_DOMAIN="${MAIN_DOMAIN//\'/}"
   MAIN_DOMAIN="$(printf '%s' "$MAIN_DOMAIN" | tr -d '\r' | xargs)"
+  GITHUB_USERNAME="${GITHUB_USERNAME//\`/}"
+  GITHUB_USERNAME="${GITHUB_USERNAME//\"/}"
+  GITHUB_USERNAME="${GITHUB_USERNAME//\'/}"
+  GITHUB_USERNAME="$(printf '%s' "$GITHUB_USERNAME" | tr -d '\r' | xargs)"
+  GITHUB_TOKEN="${GITHUB_TOKEN//\`/}"
+  GITHUB_TOKEN="${GITHUB_TOKEN//\"/}"
+  GITHUB_TOKEN="${GITHUB_TOKEN//\'/}"
+  GITHUB_TOKEN="$(printf '%s' "$GITHUB_TOKEN" | tr -d '\r' | xargs)"
 }
 
 save_single_state() {
@@ -373,6 +389,8 @@ save_single_state() {
     echo "DEPLOY_FRONTEND=${DEPLOY_FRONTEND:-}"
     echo "FRONTEND_REPO=${FRONTEND_REPO:-}"
     echo "FRONTEND_BRANCH=${FRONTEND_BRANCH:-}"
+    echo "GITHUB_USERNAME=${GITHUB_USERNAME:-}"
+    echo "GITHUB_TOKEN=${GITHUB_TOKEN:-}"
   } > "$tmp_state"
   sudo mv "$tmp_state" "$SINGLE_STATE_FILE" >/dev/null 2>&1 || true
   sudo chmod 600 "$SINGLE_STATE_FILE" >/dev/null 2>&1 || true
@@ -402,6 +420,8 @@ save_multi_state() {
     echo "DEPLOY_FRONTEND=${DEPLOY_FRONTEND:-}"
     echo "FRONTEND_REPO=${FRONTEND_REPO:-}"
     echo "FRONTEND_BRANCH=${FRONTEND_BRANCH:-}"
+    echo "GITHUB_USERNAME=${GITHUB_USERNAME:-}"
+    echo "GITHUB_TOKEN=${GITHUB_TOKEN:-}"
   } > "$tmp_state"
   sudo mv "$tmp_state" "$MULTI_STATE_FILE" >/dev/null 2>&1 || true
   sudo chmod 600 "$MULTI_STATE_FILE" >/dev/null 2>&1 || true
@@ -412,6 +432,63 @@ load_multi_state
 
 if [ -t 0 ] && [ -t 1 ]; then
   prompt_ports
+fi
+
+save_github_token_file() {
+  local token="$1"
+  if [ -z "${token:-}" ]; then
+    return 0
+  fi
+  if ! is_cmd sudo; then
+    return 0
+  fi
+  sudo mkdir -p /etc/absenta >/dev/null 2>&1 || true
+  local tmp="/tmp/absenta-github.token.$$"
+  umask 077
+  printf '%s\n' "$token" > "$tmp"
+  sudo mv "$tmp" /etc/absenta/github.token >/dev/null 2>&1 || true
+  sudo chmod 600 /etc/absenta/github.token >/dev/null 2>&1 || true
+}
+
+github_repo_is_https_github() {
+  local r="$1"
+  [[ "$r" =~ ^https://github\.com/ ]]
+}
+
+git_repo_accessible_without_token() {
+  local r="$1"
+  git ls-remote "$r" HEAD >/dev/null 2>&1
+}
+
+build_git_auth_args() {
+  local token="$1"
+  local username="$2"
+  if [ -z "${token:-}" ]; then
+    return 0
+  fi
+  if ! is_cmd base64; then
+    echo "base64 belum tersedia. Instal dulu: sudo apt-get update && sudo apt-get install -y coreutils"
+    exit 1
+  fi
+  local basic
+  basic="$(printf '%s:%s' "${username:-x-access-token}" "$token" | base64 | tr -d '\n')"
+  git_auth_args+=(-c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${basic}")
+}
+
+github_token_works_for_repo() {
+  local repo="$1"
+  local token="$2"
+  local username="$3"
+  git_auth_args=()
+  build_git_auth_args "$token" "$username"
+  if [ "${#git_auth_args[@]}" -eq 0 ]; then
+    return 1
+  fi
+  git "${git_auth_args[@]}" ls-remote "$repo" HEAD >/dev/null 2>&1
+}
+
+if [ -z "${GITHUB_USERNAME:-}" ]; then
+  GITHUB_USERNAME="x-access-token"
 fi
 
 if [ -z "$GITHUB_TOKEN" ]; then
@@ -428,11 +505,48 @@ if [ -z "$GITHUB_TOKEN" ]; then
   done
 fi
 
-if [ -z "$GITHUB_TOKEN" ]; then
-  if [[ "$BACKEND_REPO" =~ ^https://github\.com/ ]]; then
+needs_github_token="false"
+if github_repo_is_https_github "$BACKEND_REPO"; then
+  if ! git_repo_accessible_without_token "$BACKEND_REPO"; then
+    needs_github_token="true"
+  fi
+fi
+if [ "$needs_github_token" = "false" ] && [ "${DEPLOY_FRONTEND:-true}" = "true" ]; then
+  if github_repo_is_https_github "${FRONTEND_REPO:-}"; then
+    if ! git_repo_accessible_without_token "$FRONTEND_REPO"; then
+      needs_github_token="true"
+    fi
+  fi
+fi
+
+if [ "$needs_github_token" = "true" ]; then
+  if [ -n "${GITHUB_TOKEN:-}" ]; then
+    if ! github_token_works_for_repo "$BACKEND_REPO" "$GITHUB_TOKEN" "$GITHUB_USERNAME"; then
+      GITHUB_TOKEN=""
+    fi
+  fi
+  if [ -z "${GITHUB_TOKEN:-}" ]; then
     if [ -t 0 ] && [ -t 1 ]; then
-      read -rsp "Masukkan GitHub Token (tidak akan tampil): " GITHUB_TOKEN
-      echo ""
+      while true; do
+        read -rsp "Masukkan GitHub Token (tidak akan tampil): " GITHUB_TOKEN
+        echo ""
+        GITHUB_TOKEN="$(printf '%s' "$GITHUB_TOKEN" | tr -d '\r' | xargs)"
+        if [ -z "${GITHUB_TOKEN:-}" ]; then
+          echo "Token kosong."
+          continue
+        fi
+        if github_token_works_for_repo "$BACKEND_REPO" "$GITHUB_TOKEN" "$GITHUB_USERNAME"; then
+          save_github_token_file "$GITHUB_TOKEN"
+          save_single_state
+          save_multi_state
+          break
+        fi
+        echo "Token tidak valid / sudah kedaluwarsa untuk repo ini."
+        GITHUB_TOKEN=""
+      done
+    else
+      echo "Repo memerlukan GitHub Token, namun deploy berjalan non-interaktif."
+      exit 1
     fi
   fi
 fi
