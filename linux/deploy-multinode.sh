@@ -3,6 +3,7 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODE="${MODE:-}"
 COMPOSE_FILE="${COMPOSE_FILE:-}"
+ACTION="${ACTION:-deploy}"
 if [ -z "${BACKEND_PATH:-}" ]; then
   legacy_backend="$DIR/../../ProjekAbsenta/backend/absenta_backend"
   sibling_backend="$DIR/../absenta_backend"
@@ -91,19 +92,42 @@ BACKEND_REPO="${BACKEND_REPO//\"/}"
 BACKEND_REPO="${BACKEND_REPO//\'/}"
 BACKEND_REPO="${BACKEND_REPO%/}"
 
+select_main_menu() {
+  echo ""
+  echo "=== DEPLOY LINUX (ABSENTA) ==="
+  echo "1) Deploy/Update SINGLE (1 mesin: nginx+postgres+redis+api+workers)"
+  echo "2) Deploy/Update MULTI (DB+Redis external, api+workers di mesin ini)"
+  echo "3) Status SINGLE"
+  echo "4) Status MULTI"
+  echo "5) Logs API"
+  echo "6) Restart SINGLE"
+  echo "7) Restart MULTI"
+  echo "8) Stop SINGLE"
+  echo "9) Stop MULTI"
+  echo "10) Cleanup disk docker (prune)"
+  echo "11) Reset config tersimpan (/etc/absenta/single.env & multi.env)"
+  echo "0) Keluar"
+  read -rp "Pilih: " opt
+  case "${opt:-}" in
+    1) ACTION="deploy"; MODE="single" ;;
+    2) ACTION="deploy"; MODE="multi" ;;
+    3) ACTION="status"; MODE="single" ;;
+    4) ACTION="status"; MODE="multi" ;;
+    5) ACTION="logs_api" ;;
+    6) ACTION="restart"; MODE="single" ;;
+    7) ACTION="restart"; MODE="multi" ;;
+    8) ACTION="stop"; MODE="single" ;;
+    9) ACTION="stop"; MODE="multi" ;;
+    10) ACTION="cleanup" ;;
+    11) ACTION="reset_config" ;;
+    0) exit 0 ;;
+    *) ACTION="deploy"; MODE="multi" ;;
+  esac
+}
+
 if [ -z "$MODE" ]; then
   if [ -t 0 ] && [ -t 1 ]; then
-    echo "Pilih mode deploy:"
-    echo "  1) Single instance (nginx + postgresql + redis + api + workers) di 1 mesin"
-    echo "  2) Multi instance (postgresql external + redis external, api + workers di mesin ini)"
-    echo "  3) Custom (gunakan COMPOSE_FILE yang Anda set sendiri)"
-    read -rp "Pilihan [1/2/3]: " choice
-    case "${choice:-}" in
-      1) MODE="single" ;;
-      2) MODE="multi" ;;
-      3) MODE="custom" ;;
-      *) MODE="multi" ;;
-    esac
+    select_main_menu
   else
     MODE="multi"
   fi
@@ -116,6 +140,63 @@ if [ -z "$COMPOSE_FILE" ]; then
     custom) COMPOSE_FILE="$DIR/docker-compose.linux.yml" ;;
     *) COMPOSE_FILE="$DIR/docker-compose.linux.multi.yml" ;;
   esac
+fi
+
+DOCKER_BIN="docker"
+if ! docker info >/dev/null 2>&1; then
+  if is_cmd sudo && sudo -n true 2>/dev/null; then
+    DOCKER_BIN="sudo docker"
+  fi
+fi
+max_wait=180
+waited=0
+until $DOCKER_BIN info >/dev/null 2>&1; do
+  waited=$((waited+5))
+  if [ "$waited" -ge "$max_wait" ]; then
+    echo "docker engine not ready"
+    exit 1
+  fi
+  sleep 5
+done
+
+run_non_deploy_action() {
+  case "$ACTION" in
+    status)
+      $DOCKER_BIN compose -f "$COMPOSE_FILE" ps || true
+      $DOCKER_BIN ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}" || true
+      exit 0
+      ;;
+    logs_api)
+      $DOCKER_BIN logs --tail 200 -f absenta-backend-api
+      exit 0
+      ;;
+    restart)
+      $DOCKER_BIN compose -f "$COMPOSE_FILE" restart
+      exit 0
+      ;;
+    stop)
+      $DOCKER_BIN compose -f "$COMPOSE_FILE" down || true
+      exit 0
+      ;;
+    cleanup)
+      $DOCKER_BIN system prune -af --volumes
+      $DOCKER_BIN builder prune -af
+      exit 0
+      ;;
+    reset_config)
+      if is_cmd sudo; then
+        sudo rm -f /etc/absenta/single.env /etc/absenta/multi.env || true
+      else
+        rm -f /etc/absenta/single.env /etc/absenta/multi.env || true
+      fi
+      echo "Config reset OK"
+      exit 0
+      ;;
+  esac
+}
+
+if [ "$ACTION" != "deploy" ]; then
+  run_non_deploy_action
 fi
 
 load_single_state() {
@@ -338,25 +419,6 @@ fi
 
 save_single_state
 save_multi_state
-
-# Use sudo for docker if current user lacks access to Docker daemon
-DOCKER_BIN="docker"
-if ! docker info >/dev/null 2>&1; then
-  if is_cmd sudo && sudo -n true 2>/dev/null; then
-    DOCKER_BIN="sudo docker"
-  fi
-fi
-
-max_wait=180
-waited=0
-until $DOCKER_BIN info >/dev/null 2>&1; do
-  waited=$((waited+5))
-  if [ "$waited" -ge "$max_wait" ]; then
-    echo "docker engine not ready"
-    exit 1
-  fi
-  sleep 5
-done
 
 git_repo_url="$BACKEND_REPO"
 git_auth_args=()

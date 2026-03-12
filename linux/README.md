@@ -78,14 +78,27 @@ cd absenta-deploy/linux
 COMPOSE_FILE="$PWD/docker-compose.linux.external-redis.yml" ./deploy-multinode.sh
 ```
 
-## Mode deploy (pilih sebelum eksekusi)
+## Menu deploy (1 klik)
 Saat menjalankan `deploy-multinode.sh`, Anda akan diminta memilih:
 - **Single instance**: nginx + postgresql + redis + api + workers di 1 mesin
 - **Multi instance**: postgresql external + redis external, api + workers di mesin ini
 
+
 File compose yang dipakai:
 - Single: `docker-compose.linux.single.yml`
 - Multi: `docker-compose.linux.multi.yml`
+
+## Domain + SSL (Single instance)
+- Saat mode **single**, script akan menawarkan setup domain + HTTPS.
+- Jika Anda pilih aktif, script akan:
+  - issue sertifikat Let’s Encrypt via HTTP challenge (port 80)
+  - switch nginx config ke HTTPS (port 443)
+  - buat cron renew otomatis + reload nginx
+- Domain, email Let’s Encrypt, dan URL publik (`PUBLIC_APP_URL` / `PUBLIC_INVOICE_BASE_URL`) diminta lewat prompt (tanpa edit `.env`).
+
+Syarat:
+- Domain (A record) sudah mengarah ke IP VPS
+- Port 80 dan 443 terbuka di firewall/VPS panel
 
 ## Override lokasi source backend
 Default script akan:

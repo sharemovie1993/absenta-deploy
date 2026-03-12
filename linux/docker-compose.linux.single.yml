@@ -42,6 +42,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,6 +64,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/infra.worker.js"]
     depends_on:
       postgres:
@@ -81,6 +85,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/billing.worker.js"]
     depends_on:
       postgres:
@@ -100,6 +106,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/notification.worker.js"]
     depends_on:
       postgres:
@@ -119,6 +127,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/attendance.worker.js"]
     depends_on:
       postgres:
@@ -138,6 +148,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/analytics.worker.js"]
     depends_on:
       postgres:
@@ -157,6 +169,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/maintenance.worker.js"]
     depends_on:
       postgres:
@@ -192,8 +206,11 @@ services:
       - backend-api
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - absenta_letsencrypt:/etc/letsencrypt
+      - absenta_certbot_www:/var/www/certbot
 
 networks:
   default:
@@ -202,3 +219,7 @@ networks:
 volumes:
   absenta_pgdata:
   absenta_redisdata:
+  absenta_letsencrypt:
+    name: absenta-letsencrypt
+  absenta_certbot_www:
+    name: absenta-certbot-www
