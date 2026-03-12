@@ -506,6 +506,23 @@ if [ -t 0 ] && [ -t 1 ]; then
   prompt_ssl_single
 fi
 
+render_nginx_http_conf() {
+  local main="${MAIN_DOMAIN:-}"
+  if [ -z "$main" ]; then
+    local h="${DOMAIN:-}"
+    h="${h%%:*}"
+    main="${h#*.}"
+    if [ "$main" = "$h" ]; then
+      main="localhost"
+    fi
+  fi
+  if [ -f "$DIR/nginx/default.http.template.conf" ]; then
+    sed "s/__MAIN_DOMAIN__/${main}/g" "$DIR/nginx/default.http.template.conf" > "$DIR/nginx/default.conf"
+  fi
+}
+
+render_nginx_http_conf
+
 prompt_frontend_repo() {
   if [ "${DEPLOY_FRONTEND:-true}" != "true" ]; then
     return 0
@@ -798,7 +815,15 @@ setup_ssl_cron_single() {
       return 1
     }
 
-  sed "s/__DOMAIN__/${DOMAIN}/g" "$DIR/nginx/default.https.template.conf" > "$DIR/nginx/default.conf"
+  main="${MAIN_DOMAIN:-}"
+  if [ -z "$main" ]; then
+    d="${DOMAIN%%:*}"
+    main="${d#*.}"
+    if [ "$main" = "$d" ]; then
+      main="$d"
+    fi
+  fi
+  sed -e "s/__DOMAIN__/${DOMAIN}/g" -e "s/__MAIN_DOMAIN__/${main}/g" "$DIR/nginx/default.https.template.conf" > "$DIR/nginx/default.conf"
 
   $DOCKER_BIN exec absenta-nginx nginx -t >/dev/null 2>&1 || {
     echo "Config nginx HTTPS tidak valid. Mengembalikan config HTTP."

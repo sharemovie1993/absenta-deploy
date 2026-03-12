@@ -97,6 +97,9 @@ File compose yang dipakai:
 - Routing nginx:
   - `/api/*` dan `/socket.io/*` ke backend
   - selain itu ke frontend (SPA)
+ 
+Catatan CORS (untuk domain sendiri):
+- Jika frontend di `www.domain.com` dan API di `api.domain.com`, set `MAIN_DOMAIN=domain.com` saat deploy.
 
 ## Uninstall (hapus total)
 Menu deploy menyediakan opsi uninstall untuk menghapus jejak:
