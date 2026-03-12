@@ -472,7 +472,7 @@ build_git_auth_args() {
   fi
   local basic
   basic="$(printf '%s:%s' "${username:-x-access-token}" "$token" | base64 | tr -d '\n')"
-  git_auth_args+=(-c "http.https://github.com/.extraheader=Authorization: Basic ${basic}")
+  git_auth_args+=(-c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${basic}")
 }
 
 classify_git_lsremote_error() {
@@ -834,12 +834,7 @@ save_multi_state
 git_repo_url="$BACKEND_REPO"
 git_auth_args=()
 if [ -n "$GITHUB_TOKEN" ]; then
-  if ! is_cmd base64; then
-    echo "base64 belum tersedia. Instal dulu: sudo apt-get update && sudo apt-get install -y coreutils"
-    exit 1
-  fi
-  basic="$(printf '%s:%s' "$GITHUB_USERNAME" "$GITHUB_TOKEN" | base64 | tr -d '\n')"
-  git_auth_args+=(-c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${basic}")
+  build_git_auth_args "$GITHUB_TOKEN" "$GITHUB_USERNAME"
 fi
 
 git_ssh_cmd=""
