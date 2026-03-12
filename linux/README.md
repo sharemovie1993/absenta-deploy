@@ -83,6 +83,10 @@ Saat menjalankan `deploy-multinode.sh`, Anda akan diminta memilih:
 - **Single instance**: nginx + postgresql + redis + api + workers di 1 mesin
 - **Multi instance**: postgresql external + redis external, api + workers di mesin ini
 
+Catatan port 80/443:
+- Jika port 80/443 sudah dipakai aplikasi lain (misal CBT), pilih port alternatif (8080/8443) untuk testing.
+- Untuk SSL Let’s Encrypt, port 80/443 harus bisa dipakai oleh nginx Absenta (sementara atau permanen).
+
 
 File compose yang dipakai:
 - Single: `docker-compose.linux.single.yml`
@@ -93,6 +97,13 @@ File compose yang dipakai:
 - Routing nginx:
   - `/api/*` dan `/socket.io/*` ke backend
   - selain itu ke frontend (SPA)
+
+## Uninstall (hapus total)
+Menu deploy menyediakan opsi uninstall untuk menghapus jejak:
+- Stop & remove container
+- Remove volume data (PostgreSQL/Redis/Let’s Encrypt)
+- Remove image Absenta
+- Remove config tersimpan di `/etc/absenta/*` dan cron renew SSL
 
 ## Domain + SSL (Single instance)
 - Saat mode **single**, script akan menawarkan setup domain + HTTPS.

@@ -42,6 +42,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
       PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     depends_on:
@@ -73,6 +74,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
       PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/infra.worker.js"]
@@ -94,6 +96,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
       PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/billing.worker.js"]
@@ -115,6 +118,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
       PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/notification.worker.js"]
@@ -136,6 +140,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
       PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/attendance.worker.js"]
@@ -157,6 +162,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
       PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/analytics.worker.js"]
@@ -178,6 +184,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
       PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/maintenance.worker.js"]

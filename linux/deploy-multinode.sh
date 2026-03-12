@@ -25,6 +25,7 @@ SINGLE_STATE_FILE="${SINGLE_STATE_FILE:-/etc/absenta/single.env}"
 MULTI_STATE_FILE="${MULTI_STATE_FILE:-/etc/absenta/multi.env}"
 SSL_ENABLED="${SSL_ENABLED:-}"
 DOMAIN="${DOMAIN:-}"
+MAIN_DOMAIN="${MAIN_DOMAIN:-}"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
 PUBLIC_APP_URL="${PUBLIC_APP_URL:-}"
 PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL:-}"
@@ -115,6 +116,9 @@ select_main_menu() {
   echo "9) Stop MULTI"
   echo "10) Cleanup disk docker (prune)"
   echo "11) Reset config tersimpan (/etc/absenta/single.env & multi.env)"
+  echo "12) Start layanan web VPS (nginx/apache) (kembalikan port 80/443)"
+  echo "13) Stop layanan web VPS (nginx/apache)"
+  echo "14) Uninstall ABSENTA total (hapus container+volume+image+config+cron)"
   echo "0) Keluar"
   read -rp "Pilih: " opt
   case "${opt:-}" in
@@ -129,6 +133,9 @@ select_main_menu() {
     9) ACTION="stop"; MODE="multi" ;;
     10) ACTION="cleanup" ;;
     11) ACTION="reset_config" ;;
+    12) ACTION="start_web" ;;
+    13) ACTION="stop_web" ;;
+    14) ACTION="uninstall" ;;
     0) exit 0 ;;
     *) ACTION="deploy"; MODE="multi" ;;
   esac
@@ -239,6 +246,54 @@ run_non_deploy_action() {
       echo "Config reset OK"
       exit 0
       ;;
+    start_web)
+      if command -v systemctl >/dev/null 2>&1; then
+        sudo systemctl start nginx 2>/dev/null || true
+        sudo systemctl start apache2 2>/dev/null || true
+        sudo systemctl start httpd 2>/dev/null || true
+      fi
+      echo "Layanan web VPS (jika ada) sudah dicoba dijalankan."
+      exit 0
+      ;;
+    stop_web)
+      if command -v systemctl >/dev/null 2>&1; then
+        sudo systemctl stop nginx 2>/dev/null || true
+        sudo systemctl stop apache2 2>/dev/null || true
+        sudo systemctl stop httpd 2>/dev/null || true
+      fi
+      echo "Layanan web VPS (jika ada) sudah dicoba dihentikan."
+      exit 0
+      ;;
+    uninstall)
+      single_compose="$DIR/docker-compose.linux.single.yml"
+      multi_compose="$DIR/docker-compose.linux.multi.yml"
+      $DOCKER_BIN compose -f "$single_compose" down -v --remove-orphans >/dev/null 2>&1 || true
+      $DOCKER_BIN compose -f "$multi_compose" down -v --remove-orphans >/dev/null 2>&1 || true
+
+      $DOCKER_BIN rm -f absenta-nginx absenta-frontend absenta-backend-api absenta-postgres absenta-redis >/dev/null 2>&1 || true
+      $DOCKER_BIN ps -a --format "{{.Names}}" | grep -E '^absenta-' | xargs -r $DOCKER_BIN rm -f >/dev/null 2>&1 || true
+
+      $DOCKER_BIN image rm -f absenta-backend:latest absenta-backend-migrate:latest absenta-frontend:latest >/dev/null 2>&1 || true
+
+      $DOCKER_BIN volume rm -f absenta_pgdata absenta_redisdata absenta-letsencrypt absenta-certbot-www >/dev/null 2>&1 || true
+      $DOCKER_BIN network rm absenta-net >/dev/null 2>&1 || true
+
+      if is_cmd sudo; then
+        sudo rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/github.token /etc/cron.d/absenta-certbot >/dev/null 2>&1 || true
+      else
+        rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/github.token /etc/cron.d/absenta-certbot >/dev/null 2>&1 || true
+      fi
+
+      if [ -d "$DIR/../absenta_backend/.git" ]; then
+        rm -rf "$DIR/../absenta_backend" >/dev/null 2>&1 || true
+      fi
+      if [ -d "$DIR/../absenta_frontend/.git" ]; then
+        rm -rf "$DIR/../absenta_frontend" >/dev/null 2>&1 || true
+      fi
+
+      echo "Uninstall ABSENTA selesai."
+      exit 0
+      ;;
   esac
 }
 
@@ -283,6 +338,7 @@ save_single_state() {
     echo "POSTGRES_USER=${POSTGRES_USER:-postgres}"
     echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}"
     echo "DOMAIN=${DOMAIN:-}"
+    echo "MAIN_DOMAIN=${MAIN_DOMAIN:-}"
     echo "CERTBOT_EMAIL=${CERTBOT_EMAIL:-}"
     echo "SSL_ENABLED=${SSL_ENABLED:-}"
     echo "PUBLIC_APP_URL=${PUBLIC_APP_URL:-}"
@@ -316,6 +372,7 @@ save_multi_state() {
     echo "HTTPS_PORT=${HTTPS_PORT:-}"
     echo "SSL_ENABLED=${SSL_ENABLED:-}"
     echo "DOMAIN=${DOMAIN:-}"
+    echo "MAIN_DOMAIN=${MAIN_DOMAIN:-}"
     echo "CERTBOT_EMAIL=${CERTBOT_EMAIL:-}"
     echo "DEPLOY_FRONTEND=${DEPLOY_FRONTEND:-}"
     echo "FRONTEND_REPO=${FRONTEND_REPO:-}"
@@ -427,6 +484,16 @@ prompt_ssl_single() {
     if [ -z "$DOMAIN" ]; then
       read -rp "DOMAIN (contoh: api.absenta.id): " DOMAIN
       DOMAIN="$(printf '%s' "$DOMAIN" | tr -d '\r' | xargs)"
+    fi
+    if [ -z "${MAIN_DOMAIN:-}" ]; then
+      d="${DOMAIN%%:*}"
+      guess="${d#*.}"
+      if [ "$guess" = "$d" ]; then
+        guess="$d"
+      fi
+      read -rp "MAIN_DOMAIN (base domain, untuk CORS/tenant) [${guess}]: " MAIN_DOMAIN
+      MAIN_DOMAIN="${MAIN_DOMAIN:-$guess}"
+      MAIN_DOMAIN="$(printf '%s' "$MAIN_DOMAIN" | tr -d '\r' | xargs)"
     fi
     if [ -z "$CERTBOT_EMAIL" ]; then
       read -rp "EMAIL untuk Let’s Encrypt (contoh: asep@gmail.com): " CERTBOT_EMAIL

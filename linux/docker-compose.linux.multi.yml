@@ -18,6 +18,9 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     ports:
       - "3001:3001"
 
@@ -42,6 +45,9 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/infra.worker.js"]
 
   worker-billing:
@@ -56,6 +62,9 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/billing.worker.js"]
 
   worker-notification:
@@ -70,6 +79,9 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/notification.worker.js"]
 
   worker-attendance:
@@ -84,6 +96,9 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/attendance.worker.js"]
 
   worker-analytics:
@@ -98,6 +113,9 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/analytics.worker.js"]
 
   worker-maintenance:
@@ -112,6 +130,9 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      PUBLIC_INVOICE_BASE_URL: ${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/maintenance.worker.js"]
 
   worker-agent:
