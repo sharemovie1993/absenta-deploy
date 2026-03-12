@@ -20,6 +20,13 @@ NO_CACHE="${NO_CACHE:-false}"
 RUN_MIGRATE="${RUN_MIGRATE:-true}"
 STACK_DOWN_FIRST="${STACK_DOWN_FIRST:-true}"
 MIGRATE_IMAGE="${MIGRATE_IMAGE:-absenta-backend-migrate:latest}"
+SINGLE_STATE_FILE="${SINGLE_STATE_FILE:-/etc/absenta/single.env}"
+MULTI_STATE_FILE="${MULTI_STATE_FILE:-/etc/absenta/multi.env}"
+SSL_ENABLED="${SSL_ENABLED:-}"
+DOMAIN="${DOMAIN:-}"
+CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
+PUBLIC_APP_URL="${PUBLIC_APP_URL:-}"
+PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL:-}"
 
 # -----------------------------------------------------------------------------
 # Ensure dependencies (Ubuntu 22.x friendly). Skip if already installed.
@@ -111,6 +118,75 @@ if [ -z "$COMPOSE_FILE" ]; then
   esac
 fi
 
+load_single_state() {
+  if [ "$MODE" != "single" ]; then
+    return 0
+  fi
+  if [ -f "$SINGLE_STATE_FILE" ]; then
+    set -a
+    . "$SINGLE_STATE_FILE" || true
+    set +a
+  fi
+}
+
+load_multi_state() {
+  if [ "$MODE" != "multi" ]; then
+    return 0
+  fi
+  if [ -f "$MULTI_STATE_FILE" ]; then
+    set -a
+    . "$MULTI_STATE_FILE" || true
+    set +a
+  fi
+}
+
+save_single_state() {
+  if [ "$MODE" != "single" ]; then
+    return 0
+  fi
+  if ! is_cmd sudo; then
+    return 0
+  fi
+  sudo mkdir -p "$(dirname "$SINGLE_STATE_FILE")" >/dev/null 2>&1 || true
+  tmp_state="/tmp/absenta-single.env.$$"
+  umask 077
+  {
+    echo "POSTGRES_DB=${POSTGRES_DB:-absensi}"
+    echo "POSTGRES_USER=${POSTGRES_USER:-postgres}"
+    echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}"
+    echo "DOMAIN=${DOMAIN:-}"
+    echo "CERTBOT_EMAIL=${CERTBOT_EMAIL:-}"
+    echo "SSL_ENABLED=${SSL_ENABLED:-}"
+    echo "PUBLIC_APP_URL=${PUBLIC_APP_URL:-}"
+    echo "PUBLIC_INVOICE_BASE_URL=${PUBLIC_INVOICE_BASE_URL:-}"
+  } > "$tmp_state"
+  sudo mv "$tmp_state" "$SINGLE_STATE_FILE" >/dev/null 2>&1 || true
+  sudo chmod 600 "$SINGLE_STATE_FILE" >/dev/null 2>&1 || true
+}
+
+save_multi_state() {
+  if [ "$MODE" != "multi" ]; then
+    return 0
+  fi
+  if ! is_cmd sudo; then
+    return 0
+  fi
+  sudo mkdir -p "$(dirname "$MULTI_STATE_FILE")" >/dev/null 2>&1 || true
+  tmp_state="/tmp/absenta-multi.env.$$"
+  umask 077
+  {
+    echo "DATABASE_URL=${DATABASE_URL:-}"
+    echo "REDIS_URL=${REDIS_URL:-}"
+    echo "PUBLIC_APP_URL=${PUBLIC_APP_URL:-}"
+    echo "PUBLIC_INVOICE_BASE_URL=${PUBLIC_INVOICE_BASE_URL:-}"
+  } > "$tmp_state"
+  sudo mv "$tmp_state" "$MULTI_STATE_FILE" >/dev/null 2>&1 || true
+  sudo chmod 600 "$MULTI_STATE_FILE" >/dev/null 2>&1 || true
+}
+
+load_single_state
+load_multi_state
+
 if [ -z "$GITHUB_TOKEN" ]; then
   token_candidates=(
     "$DIR/../env/github.token"
@@ -148,7 +224,11 @@ prompt_db_redis() {
       read -rsp "POSTGRES_PASSWORD (tidak akan tampil): " POSTGRES_PASSWORD
       echo ""
       if [ -z "$POSTGRES_PASSWORD" ]; then
-        POSTGRES_PASSWORD="change-me"
+        if is_cmd openssl; then
+          POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+        else
+          POSTGRES_PASSWORD="change-me"
+        fi
       fi
     fi
     if [ -z "${DATABASE_URL:-}" ]; then
@@ -174,7 +254,7 @@ prompt_db_redis() {
       read -rp "REDIS_URL (contoh: redis://10.10.10.250:6379): " REDIS_URL
     fi
   fi
-  export DATABASE_URL REDIS_URL POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD
+  export DATABASE_URL REDIS_URL POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD PUBLIC_APP_URL PUBLIC_INVOICE_BASE_URL
 }
 
 if [ -t 0 ] && [ -t 1 ]; then
@@ -183,6 +263,81 @@ else
   : "${DATABASE_URL:=}"
   : "${REDIS_URL:=}"
 fi
+
+prompt_ssl_single() {
+  if [ "$MODE" != "single" ]; then
+    return 0
+  fi
+  if [ -z "$SSL_ENABLED" ]; then
+    read -rp "Aktifkan SSL (HTTPS) + domain? [y/N]: " ans
+    case "$(printf '%s' "${ans:-}" | tr '[:upper:]' '[:lower:]')" in
+      y|yes) SSL_ENABLED="true" ;;
+      *) SSL_ENABLED="false" ;;
+    esac
+  fi
+  if [ "$SSL_ENABLED" = "true" ]; then
+    if [ -z "$DOMAIN" ]; then
+      read -rp "DOMAIN (contoh: api.absenta.id): " DOMAIN
+      DOMAIN="$(printf '%s' "$DOMAIN" | tr -d '\r' | xargs)"
+    fi
+    if [ -z "$CERTBOT_EMAIL" ]; then
+      read -rp "EMAIL untuk Let’s Encrypt (contoh: asep@gmail.com): " CERTBOT_EMAIL
+      CERTBOT_EMAIL="$(printf '%s' "$CERTBOT_EMAIL" | tr -d '\r' | xargs)"
+    fi
+  fi
+}
+
+if [ -t 0 ] && [ -t 1 ]; then
+  prompt_ssl_single
+fi
+
+prompt_public_urls_single() {
+  if [ "$MODE" != "single" ]; then
+    return 0
+  fi
+  local default_scheme="http"
+  if [ "$SSL_ENABLED" = "true" ]; then
+    default_scheme="https"
+  fi
+  local base_default=""
+  if [ -n "${DOMAIN:-}" ]; then
+    base_default="${default_scheme}://${DOMAIN}"
+  else
+    base_default="${default_scheme}://localhost"
+  fi
+  if [ -z "${PUBLIC_APP_URL:-}" ]; then
+    read -rp "PUBLIC_APP_URL [${base_default}]: " PUBLIC_APP_URL
+    PUBLIC_APP_URL="${PUBLIC_APP_URL:-$base_default}"
+  fi
+  if [ -z "${PUBLIC_INVOICE_BASE_URL:-}" ]; then
+    read -rp "PUBLIC_INVOICE_BASE_URL [${base_default}]: " PUBLIC_INVOICE_BASE_URL
+    PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL:-$base_default}"
+  fi
+  export PUBLIC_APP_URL PUBLIC_INVOICE_BASE_URL
+}
+
+prompt_public_urls_multi() {
+  if [ "$MODE" != "multi" ]; then
+    return 0
+  fi
+  if [ -z "${PUBLIC_APP_URL:-}" ]; then
+    read -rp "PUBLIC_APP_URL (contoh: https://api.absenta.id): " PUBLIC_APP_URL
+    PUBLIC_APP_URL="$(printf '%s' "$PUBLIC_APP_URL" | tr -d '\r' | xargs)"
+  fi
+  if [ -z "${PUBLIC_INVOICE_BASE_URL:-}" ]; then
+    read -rp "PUBLIC_INVOICE_BASE_URL (contoh: https://api.absenta.id): " PUBLIC_INVOICE_BASE_URL
+    PUBLIC_INVOICE_BASE_URL="$(printf '%s' "$PUBLIC_INVOICE_BASE_URL" | tr -d '\r' | xargs)"
+  fi
+  export PUBLIC_APP_URL PUBLIC_INVOICE_BASE_URL
+}
+
+if [ -t 0 ] && [ -t 1 ]; then
+  prompt_public_urls_single
+  prompt_public_urls_multi
+fi
+
+save_single_state
+save_multi_state
 
 # Use sudo for docker if current user lacks access to Docker daemon
 DOCKER_BIN="docker"
@@ -296,6 +451,64 @@ fi
 
 $DOCKER_BIN compose -f "$COMPOSE_FILE" up -d --remove-orphans
 $DOCKER_BIN ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
+
+setup_ssl_cron_single() {
+  if [ "$MODE" != "single" ] || [ "$SSL_ENABLED" != "true" ]; then
+    return 0
+  fi
+  if ! is_cmd sudo; then
+    return 0
+  fi
+  if [ -z "${DOMAIN:-}" ] || [ -z "${CERTBOT_EMAIL:-}" ]; then
+    return 0
+  fi
+  if [ ! -f "$DIR/nginx/default.https.template.conf" ]; then
+    return 0
+  fi
+
+  cp "$DIR/nginx/default.conf" "$DIR/nginx/default.http.bak.conf" 2>/dev/null || true
+
+  $DOCKER_BIN run --rm \
+    -v absenta-letsencrypt:/etc/letsencrypt \
+    -v absenta-certbot-www:/var/www/certbot \
+    certbot/certbot \
+    certonly --webroot -w /var/www/certbot \
+    -d "$DOMAIN" \
+    --email "$CERTBOT_EMAIL" \
+    --agree-tos --non-interactive --no-eff-email || {
+      echo "Gagal issue SSL. Pastikan DOMAIN sudah A record ke IP VPS dan port 80 terbuka."
+      mv -f "$DIR/nginx/default.http.bak.conf" "$DIR/nginx/default.conf" 2>/dev/null || true
+      $DOCKER_BIN exec absenta-nginx nginx -s reload >/dev/null 2>&1 || true
+      return 1
+    }
+
+  sed "s/__DOMAIN__/${DOMAIN}/g" "$DIR/nginx/default.https.template.conf" > "$DIR/nginx/default.conf"
+
+  $DOCKER_BIN exec absenta-nginx nginx -t >/dev/null 2>&1 || {
+    echo "Config nginx HTTPS tidak valid. Mengembalikan config HTTP."
+    mv -f "$DIR/nginx/default.http.bak.conf" "$DIR/nginx/default.conf" 2>/dev/null || true
+    $DOCKER_BIN exec absenta-nginx nginx -s reload >/dev/null 2>&1 || true
+    return 1
+  }
+
+  $DOCKER_BIN exec absenta-nginx nginx -s reload >/dev/null 2>&1 || $DOCKER_BIN restart absenta-nginx >/dev/null 2>&1 || true
+
+  sudo apt-get update -y >/dev/null 2>&1 || true
+  sudo apt-get install -y cron >/dev/null 2>&1 || true
+
+  docker_path="$(command -v docker || echo docker)"
+  cat <<EOF | sudo tee /etc/cron.d/absenta-certbot >/dev/null
+SHELL=/bin/sh
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+0 3 * * * root ${docker_path} run --rm -v absenta-letsencrypt:/etc/letsencrypt -v absenta-certbot-www:/var/www/certbot certbot/certbot renew --webroot -w /var/www/certbot --quiet && ${docker_path} exec absenta-nginx nginx -s reload >/dev/null 2>&1
+EOF
+  sudo chmod 644 /etc/cron.d/absenta-certbot >/dev/null 2>&1 || true
+  sudo systemctl enable --now cron >/dev/null 2>&1 || true
+}
+
+if [ "$MODE" = "single" ] && [ "$SSL_ENABLED" = "true" ]; then
+  setup_ssl_cron_single || true
+fi
 
 ensure_standby() {
   local name="$1"
