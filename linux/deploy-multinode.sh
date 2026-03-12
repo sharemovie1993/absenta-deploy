@@ -89,6 +89,15 @@ if [ -z "$GITHUB_TOKEN" ]; then
   done
 fi
 
+if [ -z "$GITHUB_TOKEN" ]; then
+  if [[ "$BACKEND_REPO" =~ ^https://github\.com/ ]]; then
+    if [ -t 0 ] && [ -t 1 ]; then
+      read -rsp "Masukkan GitHub Token (tidak akan tampil): " GITHUB_TOKEN
+      echo ""
+    fi
+  fi
+fi
+
 # Use sudo for docker if current user lacks access to Docker daemon
 DOCKER_BIN="docker"
 if ! docker info >/dev/null 2>&1; then
@@ -109,10 +118,14 @@ until $DOCKER_BIN info >/dev/null 2>&1; do
 done
 
 git_repo_url="$BACKEND_REPO"
-if [ -n "$GITHUB_TOKEN" ]; then
-  if [[ "$BACKEND_REPO" =~ ^https://github\.com/ ]]; then
-    git_repo_url="https://x-access-token:${GITHUB_TOKEN}@github.com/${BACKEND_REPO#https://github.com/}"
+git_auth_args=()
+if [ -n "$GITHUB_TOKEN" ] && [[ "$BACKEND_REPO" =~ ^https://github\.com/ ]]; then
+  if ! is_cmd base64; then
+    echo "base64 belum tersedia. Instal dulu: sudo apt-get update && sudo apt-get install -y coreutils"
+    exit 1
   fi
+  basic="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
+  git_auth_args+=(-c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${basic}")
 fi
 
 git_ssh_cmd=""
@@ -128,18 +141,14 @@ if [ ! -d "$BACKEND_PATH" ]; then
       exit 1
     }
   else
-    git clone --branch "$BACKEND_BRANCH" --depth 1 "$git_repo_url" "$BACKEND_PATH" || {
+    git "${git_auth_args[@]}" clone --branch "$BACKEND_BRANCH" --depth 1 "$git_repo_url" "$BACKEND_PATH" || {
       echo "Gagal clone repo backend (HTTPS)."
       echo ""
       echo "Cara paling mudah untuk repo PRIVATE:"
       echo "1) Buat GitHub Token (PAT) dengan akses repo (read)."
-      echo "2) Simpan token di VPS (sekali saja):"
-      echo "   sudo mkdir -p /etc/absenta"
-      echo "   sudo sh -lc 'echo \"TOKEN_ANDA\" > /etc/absenta/github.token'"
-      echo "   sudo chmod 600 /etc/absenta/github.token"
-      echo "3) Jalankan lagi: bash deploy-multinode.sh"
+      echo "2) Jalankan deploy lalu masukkan token saat diminta (input disembunyikan)."
       echo ""
-      echo "Alternatif: export GITHUB_TOKEN=TOKEN_ANDA lalu jalankan script."
+      echo "Alternatif: simpan token sekali di /etc/absenta/github.token"
       exit 1
     }
   fi
@@ -148,13 +157,13 @@ else
     if [ -n "$git_ssh_cmd" ]; then
       GIT_SSH_COMMAND="$git_ssh_cmd" git -C "$BACKEND_PATH" fetch --prune origin "$BACKEND_BRANCH" || true
     else
-      git -C "$BACKEND_PATH" fetch --prune origin "$BACKEND_BRANCH" || true
+      git "${git_auth_args[@]}" -C "$BACKEND_PATH" fetch --prune origin "$BACKEND_BRANCH" || true
     fi
     git -C "$BACKEND_PATH" checkout "$BACKEND_BRANCH" || true
     if [ -n "$git_ssh_cmd" ]; then
       GIT_SSH_COMMAND="$git_ssh_cmd" git -C "$BACKEND_PATH" pull --ff-only origin "$BACKEND_BRANCH" || true
     else
-      git -C "$BACKEND_PATH" pull --ff-only origin "$BACKEND_BRANCH" || true
+      git "${git_auth_args[@]}" -C "$BACKEND_PATH" pull --ff-only origin "$BACKEND_BRANCH" || true
     fi
   fi
 fi

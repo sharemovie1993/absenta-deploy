@@ -33,6 +33,12 @@ Script `deploy-multinode.sh` diset non-interaktif (`GIT_TERMINAL_PROMPT=0`), jad
 
 Jika repo backend private, pilih salah satu:
 
+- **Paling mudah (disarankan): jalankan deploy, lalu masukkan token saat diminta (input disembunyikan)**:
+
+```bash
+./deploy-multinode.sh
+```
+
 - **Pakai PAT (paling mudah)**:
 
 ```bash
