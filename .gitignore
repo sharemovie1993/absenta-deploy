@@ -1,5 +1,6 @@
 # Ignore environment files (keep examples)
 !env/*.example
+env/.env.tokengit
 
 # OS junk
 .DS_Store

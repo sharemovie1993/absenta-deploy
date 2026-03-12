@@ -284,6 +284,7 @@ run_non_deploy_action() {
       else
         rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/github.token /etc/cron.d/absenta-certbot >/dev/null 2>&1 || true
       fi
+      rm -f "$DIR/../env/.env.tokengit" >/dev/null 2>&1 || true
 
       if [ -d "$DIR/../absenta_backend/.git" ]; then
         rm -rf "$DIR/../absenta_backend" >/dev/null 2>&1 || true
@@ -323,14 +324,6 @@ load_single_state() {
   MAIN_DOMAIN="${MAIN_DOMAIN//\"/}"
   MAIN_DOMAIN="${MAIN_DOMAIN//\'/}"
   MAIN_DOMAIN="$(printf '%s' "$MAIN_DOMAIN" | tr -d '\r' | xargs)"
-  GITHUB_USERNAME="${GITHUB_USERNAME//\`/}"
-  GITHUB_USERNAME="${GITHUB_USERNAME//\"/}"
-  GITHUB_USERNAME="${GITHUB_USERNAME//\'/}"
-  GITHUB_USERNAME="$(printf '%s' "$GITHUB_USERNAME" | tr -d '\r' | xargs)"
-  GITHUB_TOKEN="${GITHUB_TOKEN//\`/}"
-  GITHUB_TOKEN="${GITHUB_TOKEN//\"/}"
-  GITHUB_TOKEN="${GITHUB_TOKEN//\'/}"
-  GITHUB_TOKEN="$(printf '%s' "$GITHUB_TOKEN" | tr -d '\r' | xargs)"
 }
 
 load_multi_state() {
@@ -354,14 +347,6 @@ load_multi_state() {
   MAIN_DOMAIN="${MAIN_DOMAIN//\"/}"
   MAIN_DOMAIN="${MAIN_DOMAIN//\'/}"
   MAIN_DOMAIN="$(printf '%s' "$MAIN_DOMAIN" | tr -d '\r' | xargs)"
-  GITHUB_USERNAME="${GITHUB_USERNAME//\`/}"
-  GITHUB_USERNAME="${GITHUB_USERNAME//\"/}"
-  GITHUB_USERNAME="${GITHUB_USERNAME//\'/}"
-  GITHUB_USERNAME="$(printf '%s' "$GITHUB_USERNAME" | tr -d '\r' | xargs)"
-  GITHUB_TOKEN="${GITHUB_TOKEN//\`/}"
-  GITHUB_TOKEN="${GITHUB_TOKEN//\"/}"
-  GITHUB_TOKEN="${GITHUB_TOKEN//\'/}"
-  GITHUB_TOKEN="$(printf '%s' "$GITHUB_TOKEN" | tr -d '\r' | xargs)"
 }
 
 save_single_state() {
@@ -389,8 +374,6 @@ save_single_state() {
     echo "DEPLOY_FRONTEND=${DEPLOY_FRONTEND:-}"
     echo "FRONTEND_REPO=${FRONTEND_REPO:-}"
     echo "FRONTEND_BRANCH=${FRONTEND_BRANCH:-}"
-    echo "GITHUB_USERNAME=${GITHUB_USERNAME:-}"
-    echo "GITHUB_TOKEN=${GITHUB_TOKEN:-}"
   } > "$tmp_state"
   sudo mv "$tmp_state" "$SINGLE_STATE_FILE" >/dev/null 2>&1 || true
   sudo chmod 600 "$SINGLE_STATE_FILE" >/dev/null 2>&1 || true
@@ -420,8 +403,6 @@ save_multi_state() {
     echo "DEPLOY_FRONTEND=${DEPLOY_FRONTEND:-}"
     echo "FRONTEND_REPO=${FRONTEND_REPO:-}"
     echo "FRONTEND_BRANCH=${FRONTEND_BRANCH:-}"
-    echo "GITHUB_USERNAME=${GITHUB_USERNAME:-}"
-    echo "GITHUB_TOKEN=${GITHUB_TOKEN:-}"
   } > "$tmp_state"
   sudo mv "$tmp_state" "$MULTI_STATE_FILE" >/dev/null 2>&1 || true
   sudo chmod 600 "$MULTI_STATE_FILE" >/dev/null 2>&1 || true
@@ -434,20 +415,23 @@ if [ -t 0 ] && [ -t 1 ]; then
   prompt_ports
 fi
 
+GITHUB_TOKEN_ENV_FILE="${GITHUB_TOKEN_ENV_FILE:-$DIR/../env/.env.tokengit}"
+
 save_github_token_file() {
   local token="$1"
+  local username="${2:-x-access-token}"
   if [ -z "${token:-}" ]; then
     return 0
   fi
-  if ! is_cmd sudo; then
-    return 0
-  fi
-  sudo mkdir -p /etc/absenta >/dev/null 2>&1 || true
-  local tmp="/tmp/absenta-github.token.$$"
+  mkdir -p "$(dirname "$GITHUB_TOKEN_ENV_FILE")" >/dev/null 2>&1 || true
+  local tmp="/tmp/absenta-github-token.env.$$"
   umask 077
-  printf '%s\n' "$token" > "$tmp"
-  sudo mv "$tmp" /etc/absenta/github.token >/dev/null 2>&1 || true
-  sudo chmod 600 /etc/absenta/github.token >/dev/null 2>&1 || true
+  {
+    echo "GITHUB_USERNAME=${username}"
+    echo "GITHUB_TOKEN=${token}"
+  } > "$tmp"
+  mv "$tmp" "$GITHUB_TOKEN_ENV_FILE" >/dev/null 2>&1 || true
+  chmod 600 "$GITHUB_TOKEN_ENV_FILE" >/dev/null 2>&1 || true
 }
 
 github_repo_is_https_github() {
@@ -511,17 +495,24 @@ if [ -z "${GITHUB_USERNAME:-}" ]; then
 fi
 
 if [ -z "$GITHUB_TOKEN" ]; then
-  token_candidates=(
-    "$DIR/../env/github.token"
-    "$HOME/.config/absenta/github.token"
-    "/etc/absenta/github.token"
-  )
-  for f in "${token_candidates[@]}"; do
-    if [ -f "$f" ]; then
-      GITHUB_TOKEN="$(tr -d '\r\n ' < "$f" || true)"
-      break
+  if [ -f "$GITHUB_TOKEN_ENV_FILE" ]; then
+    tokLine="$(grep -E '^[[:space:]]*GITHUB_TOKEN=' "$GITHUB_TOKEN_ENV_FILE" | tail -n 1 || true)"
+    if [ -n "${tokLine:-}" ]; then
+      GITHUB_TOKEN="${tokLine#*=}"
+    else
+      GITHUB_TOKEN="$(grep -E '^[[:space:]]*[^#;[:space:]]' "$GITHUB_TOKEN_ENV_FILE" | head -n 1 || true)"
     fi
-  done
+    userLine="$(grep -E '^[[:space:]]*GITHUB_USERNAME=' "$GITHUB_TOKEN_ENV_FILE" | tail -n 1 || true)"
+    if [ -n "${userLine:-}" ]; then
+      GITHUB_USERNAME="${userLine#*=}"
+    fi
+    GITHUB_TOKEN="$(printf '%s' "$GITHUB_TOKEN" | tr -d '\r' | xargs)"
+    GITHUB_TOKEN="${GITHUB_TOKEN#\"}"; GITHUB_TOKEN="${GITHUB_TOKEN%\"}"
+    GITHUB_TOKEN="${GITHUB_TOKEN#\'}"; GITHUB_TOKEN="${GITHUB_TOKEN%\'}"
+    GITHUB_USERNAME="$(printf '%s' "$GITHUB_USERNAME" | tr -d '\r' | xargs)"
+    GITHUB_USERNAME="${GITHUB_USERNAME#\"}"; GITHUB_USERNAME="${GITHUB_USERNAME%\"}"
+    GITHUB_USERNAME="${GITHUB_USERNAME#\'}"; GITHUB_USERNAME="${GITHUB_USERNAME%\'}"
+  fi
 fi
 
 needs_github_token="false"
@@ -579,9 +570,7 @@ if [ "$needs_github_token" = "true" ]; then
           fi
         done
         if [ "$ok_all" = "true" ]; then
-          save_github_token_file "$GITHUB_TOKEN"
-          save_single_state
-          save_multi_state
+          save_github_token_file "$GITHUB_TOKEN" "$GITHUB_USERNAME"
           break
         fi
         if [ "${err_kind:-}" = "NETWORK" ]; then
@@ -857,7 +846,7 @@ if [ ! -d "$BACKEND_PATH" ]; then
       echo "1) Buat GitHub Token (PAT) dengan akses repo (read)."
       echo "2) Jalankan deploy lalu masukkan token saat diminta (input disembunyikan)."
       echo ""
-      echo "Alternatif: simpan token sekali di /etc/absenta/github.token"
+      echo "Alternatif: simpan token sekali di $DIR/../env/.env.tokengit"
       exit 1
     }
   fi

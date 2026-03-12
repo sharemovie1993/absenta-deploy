@@ -53,12 +53,13 @@ export GITHUB_USERNAME="USERNAME_GITHUB_ANDA"
 ./deploy-multinode.sh
 ```
 
-- **Paling mudah (tanpa export, simpan sekali di VPS)**:
+- **Paling mudah (tanpa export, simpan sekali di folder env deploy)**:
 
 ```bash
-sudo mkdir -p /etc/absenta
-sudo sh -lc 'echo "ghp_xxx" > /etc/absenta/github.token'
-sudo chmod 600 /etc/absenta/github.token
+cd absenta-deploy
+printf "GITHUB_USERNAME=x-access-token\nGITHUB_TOKEN=ghp_xxx\n" > env/.env.tokengit
+chmod 600 env/.env.tokengit
+cd linux
 ./deploy-multinode.sh
 ```
 
