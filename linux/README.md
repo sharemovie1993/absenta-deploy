@@ -28,6 +28,27 @@ chmod +x deploy-multinode.sh
 ./deploy-multinode.sh
 ```
 
+## Tanpa input username GitHub (non-interaktif)
+Script `deploy-multinode.sh` diset non-interaktif (`GIT_TERMINAL_PROMPT=0`), jadi tidak akan meminta username/password.
+
+Jika repo backend private, pilih salah satu:
+
+- **Pakai PAT (paling mudah)**:
+
+```bash
+export GITHUB_TOKEN="ghp_xxx"
+./deploy-multinode.sh
+```
+
+- **Pakai SSH deploy key (lebih aman untuk server)**:
+  - Set `BACKEND_REPO` ke SSH:
+
+```bash
+BACKEND_REPO="git@github.com:sharemovie1993/absenta_backend.git" ./deploy-multinode.sh
+```
+
+  - Pastikan key sudah ada di VPS (misal `/root/.ssh/id_ed25519`) dan public key ditambahkan sebagai Deploy Key di repo.
+
 ## Deploy (Redis eksternal)
 
 ```bash
@@ -67,4 +88,3 @@ Disarankan menjalankan k6 dari mesin terpisah (bukan VPS yang sama) untuk menghi
 
 Output summary k6 diarahkan ke:
 - `ProjekAbsenta/backend/absenta_backend/logs/loadtest/*.json`
-
