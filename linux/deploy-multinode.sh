@@ -13,6 +13,7 @@ if [ -z "${BACKEND_PATH:-}" ]; then
 fi
 BACKEND_REPO="${BACKEND_REPO:-https://github.com/sharemovie1993/absenta_backend.git}"
 BACKEND_BRANCH="${BACKEND_BRANCH:-master}"
+GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 NO_CACHE="${NO_CACHE:-false}"
 RUN_MIGRATE="${RUN_MIGRATE:-true}"
 STACK_DOWN_FIRST="${STACK_DOWN_FIRST:-true}"
@@ -71,6 +72,9 @@ ensure_docker() {
 ensure_prereqs
 ensure_docker
 
+# Never prompt for git username/password in non-interactive deploy
+export GIT_TERMINAL_PROMPT=0
+
 # Use sudo for docker if current user lacks access to Docker daemon
 DOCKER_BIN="docker"
 if ! docker info >/dev/null 2>&1; then
@@ -90,14 +94,46 @@ until $DOCKER_BIN info >/dev/null 2>&1; do
   sleep 5
 done
 
+git_repo_url="$BACKEND_REPO"
+if [ -n "$GITHUB_TOKEN" ]; then
+  if [[ "$BACKEND_REPO" =~ ^https://github\.com/ ]]; then
+    git_repo_url="https://x-access-token:${GITHUB_TOKEN}@github.com/${BACKEND_REPO#https://github.com/}"
+  fi
+fi
+
+git_ssh_cmd=""
+if [[ "$git_repo_url" =~ ^git@github\.com: ]] || [[ "$git_repo_url" =~ ^ssh://git@github\.com/ ]]; then
+  git_ssh_cmd="ssh -o StrictHostKeyChecking=accept-new"
+fi
+
 if [ ! -d "$BACKEND_PATH" ]; then
   mkdir -p "$(dirname "$BACKEND_PATH")"
-  git clone --branch "$BACKEND_BRANCH" --depth 1 "$BACKEND_REPO" "$BACKEND_PATH"
+  if [ -n "$git_ssh_cmd" ]; then
+    GIT_SSH_COMMAND="$git_ssh_cmd" git clone --branch "$BACKEND_BRANCH" --depth 1 "$git_repo_url" "$BACKEND_PATH" || {
+      echo "Gagal clone repo backend (SSH). Pastikan deploy key sudah terpasang di VPS (non-interaktif)."
+      exit 1
+    }
+  else
+    git clone --branch "$BACKEND_BRANCH" --depth 1 "$git_repo_url" "$BACKEND_PATH" || {
+      echo "Gagal clone repo backend (HTTPS)."
+      echo "- Jika repo private: set GITHUB_TOKEN (PAT) sebelum menjalankan deploy."
+      echo "- Atau gunakan BACKEND_REPO=git@github.com:... dengan SSH deploy key."
+      exit 1
+    }
+  fi
 else
   if [ -d "$BACKEND_PATH/.git" ]; then
-    git -C "$BACKEND_PATH" fetch --prune origin "$BACKEND_BRANCH"
-    git -C "$BACKEND_PATH" checkout "$BACKEND_BRANCH"
-    git -C "$BACKEND_PATH" pull --ff-only origin "$BACKEND_BRANCH"
+    if [ -n "$git_ssh_cmd" ]; then
+      GIT_SSH_COMMAND="$git_ssh_cmd" git -C "$BACKEND_PATH" fetch --prune origin "$BACKEND_BRANCH" || true
+    else
+      git -C "$BACKEND_PATH" fetch --prune origin "$BACKEND_BRANCH" || true
+    fi
+    git -C "$BACKEND_PATH" checkout "$BACKEND_BRANCH" || true
+    if [ -n "$git_ssh_cmd" ]; then
+      GIT_SSH_COMMAND="$git_ssh_cmd" git -C "$BACKEND_PATH" pull --ff-only origin "$BACKEND_BRANCH" || true
+    else
+      git -C "$BACKEND_PATH" pull --ff-only origin "$BACKEND_BRANCH" || true
+    fi
   fi
 fi
 
