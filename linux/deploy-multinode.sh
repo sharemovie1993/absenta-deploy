@@ -19,6 +19,7 @@ GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 GITHUB_USERNAME="${GITHUB_USERNAME:-x-access-token}"
 NO_CACHE="${NO_CACHE:-false}"
 RUN_MIGRATE="${RUN_MIGRATE:-true}"
+RUN_SEED="${RUN_SEED:-false}"
 STACK_DOWN_FIRST="${STACK_DOWN_FIRST:-true}"
 MIGRATE_IMAGE="${MIGRATE_IMAGE:-absenta-backend-migrate:latest}"
 SINGLE_STATE_FILE="${SINGLE_STATE_FILE:-/etc/absenta/single.env}"
@@ -801,6 +802,15 @@ if [ "$RUN_MIGRATE" = "true" ]; then
     -e DATABASE_URL="$DATABASE_URL" \
     "$MIGRATE_IMAGE" \
     sh -lc "npx prisma migrate deploy"
+
+  if [ "$RUN_SEED" = "true" ]; then
+    echo "Menjalankan prisma db seed..."
+    $DOCKER_BIN run --rm "${migrate_net_args[@]}" \
+      --env-file "$tmp_env" \
+      -e DATABASE_URL="$DATABASE_URL" \
+      "$MIGRATE_IMAGE" \
+      sh -lc "npx prisma db seed"
+  fi
 fi
 
 $DOCKER_BIN compose -f "$COMPOSE_FILE" up -d --remove-orphans
