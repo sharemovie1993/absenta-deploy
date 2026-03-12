@@ -504,7 +504,11 @@ if [ "$RUN_MIGRATE" = "true" ]; then
     done
   fi
   $DOCKER_BIN build -t "$MIGRATE_IMAGE" --target build "$BACKEND_PATH" "${build_args[@]}"
-  $DOCKER_BIN run --rm \
+  migrate_net_args=()
+  if [ "$MODE" = "single" ]; then
+    migrate_net_args+=(--network absenta-net)
+  fi
+  $DOCKER_BIN run --rm "${migrate_net_args[@]}" \
     --env-file "$tmp_env" \
     -e DATABASE_URL="$DATABASE_URL" \
     "$MIGRATE_IMAGE" \
