@@ -310,6 +310,18 @@ load_single_state() {
     . "$SINGLE_STATE_FILE" || true
     set +a
   fi
+  PUBLIC_APP_URL="${PUBLIC_APP_URL//\`/}"
+  PUBLIC_APP_URL="${PUBLIC_APP_URL//\"/}"
+  PUBLIC_APP_URL="${PUBLIC_APP_URL//\'/}"
+  PUBLIC_APP_URL="$(printf '%s' "$PUBLIC_APP_URL" | tr -d '\r' | xargs)"
+  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\`/}"
+  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\"/}"
+  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\'/}"
+  PUBLIC_INVOICE_BASE_URL="$(printf '%s' "$PUBLIC_INVOICE_BASE_URL" | tr -d '\r' | xargs)"
+  MAIN_DOMAIN="${MAIN_DOMAIN//\`/}"
+  MAIN_DOMAIN="${MAIN_DOMAIN//\"/}"
+  MAIN_DOMAIN="${MAIN_DOMAIN//\'/}"
+  MAIN_DOMAIN="$(printf '%s' "$MAIN_DOMAIN" | tr -d '\r' | xargs)"
 }
 
 load_multi_state() {
@@ -321,6 +333,18 @@ load_multi_state() {
     . "$MULTI_STATE_FILE" || true
     set +a
   fi
+  PUBLIC_APP_URL="${PUBLIC_APP_URL//\`/}"
+  PUBLIC_APP_URL="${PUBLIC_APP_URL//\"/}"
+  PUBLIC_APP_URL="${PUBLIC_APP_URL//\'/}"
+  PUBLIC_APP_URL="$(printf '%s' "$PUBLIC_APP_URL" | tr -d '\r' | xargs)"
+  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\`/}"
+  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\"/}"
+  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\'/}"
+  PUBLIC_INVOICE_BASE_URL="$(printf '%s' "$PUBLIC_INVOICE_BASE_URL" | tr -d '\r' | xargs)"
+  MAIN_DOMAIN="${MAIN_DOMAIN//\`/}"
+  MAIN_DOMAIN="${MAIN_DOMAIN//\"/}"
+  MAIN_DOMAIN="${MAIN_DOMAIN//\'/}"
+  MAIN_DOMAIN="$(printf '%s' "$MAIN_DOMAIN" | tr -d '\r' | xargs)"
 }
 
 save_single_state() {
