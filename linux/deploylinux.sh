@@ -125,6 +125,7 @@ select_main_menu() {
   echo "=== DEPLOY LINUX (ABSENTA) ==="
   echo "1) Deploy/Update SINGLE (1 mesin: nginx+postgres+redis+api+workers)"
   echo "2) Deploy/Update MULTI (DB+Redis external, api+workers di mesin ini)"
+  echo "21) Deploy/Update SINGLE (tanpa nginx, untuk reverse proxy eksternal/VPS)"
   echo "3) Status SINGLE"
   echo "4) Status MULTI"
   echo "5) Logs API"
@@ -148,6 +149,7 @@ select_main_menu() {
   case "${opt:-}" in
     1) ACTION="deploy"; MODE="single" ;;
     2) ACTION="deploy"; MODE="multi" ;;
+    21) ACTION="deploy"; MODE="single_no_nginx" ;;
     3) ACTION="status"; MODE="single" ;;
     4) ACTION="status"; MODE="multi" ;;
     5) ACTION="logs_api" ;;
@@ -182,10 +184,18 @@ fi
 if [ -z "$COMPOSE_FILE" ]; then
   case "$MODE" in
     single) COMPOSE_FILE="$DIR/docker-compose.linux.single.yml" ;;
+    single_no_nginx) COMPOSE_FILE="$DIR/docker-compose.linux.single.no-nginx.yml" ;;
     multi) COMPOSE_FILE="$DIR/docker-compose.linux.multi.yml" ;;
     custom) COMPOSE_FILE="$DIR/docker-compose.linux.yml" ;;
     *) COMPOSE_FILE="$DIR/docker-compose.linux.multi.yml" ;;
   esac
+fi
+
+if [ "$MODE" = "single_no_nginx" ]; then
+  DEPLOY_FRONTEND="false"
+  if [ -z "${SSL_ENABLED:-}" ]; then
+    SSL_ENABLED="false"
+  fi
 fi
 
 DOCKER_BIN="docker"
@@ -1250,7 +1260,7 @@ if [ "$ACTION" != "deploy" ]; then
 fi
 
 load_single_state() {
-  if [ "$MODE" != "single" ]; then
+  if [ "$MODE" != "single" ] && [ "$MODE" != "single_no_nginx" ]; then
     return 0
   fi
   if [ -f "$SINGLE_STATE_FILE" ]; then
@@ -1296,7 +1306,7 @@ load_multi_state() {
 }
 
 save_single_state() {
-  if [ "$MODE" != "single" ]; then
+  if [ "$MODE" != "single" ] && [ "$MODE" != "single_no_nginx" ]; then
     return 0
   fi
   if ! is_cmd sudo; then
@@ -1359,7 +1369,9 @@ load_multi_state
 load_backup_state
 
 if [ -t 0 ] && [ -t 1 ]; then
-  prompt_ports
+  if [ "$MODE" != "single_no_nginx" ]; then
+    prompt_ports
+  fi
 fi
 
 prompt_github_token() {
@@ -1404,7 +1416,7 @@ build_git_auth_args() {
 prompt_github_token
 
 prompt_db_redis() {
-  if [ "$MODE" = "single" ]; then
+  if [ "$MODE" = "single" ] || [ "$MODE" = "single_no_nginx" ]; then
     if [ -z "${POSTGRES_DB:-}" ]; then
       read -rp "POSTGRES_DB [absensi]: " POSTGRES_DB
       POSTGRES_DB="${POSTGRES_DB:-absensi}"
@@ -1574,6 +1586,35 @@ prompt_public_urls_single() {
   export PUBLIC_APP_URL PUBLIC_INVOICE_BASE_URL
 }
 
+prompt_public_urls_single_no_nginx() {
+  if [ "$MODE" != "single_no_nginx" ]; then
+    return 0
+  fi
+  if [ -z "${PUBLIC_APP_URL:-}" ]; then
+    read -rp "PUBLIC_APP_URL (contoh: https://api.absenta.id): " PUBLIC_APP_URL
+    PUBLIC_APP_URL="$(printf '%s' "$PUBLIC_APP_URL" | tr -d '\r' | xargs)"
+  fi
+  if [ -z "${PUBLIC_INVOICE_BASE_URL:-}" ]; then
+    local base_default="${PUBLIC_APP_URL:-}"
+    read -rp "PUBLIC_INVOICE_BASE_URL [${base_default}]: " PUBLIC_INVOICE_BASE_URL
+    PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL:-$base_default}"
+    PUBLIC_INVOICE_BASE_URL="$(printf '%s' "$PUBLIC_INVOICE_BASE_URL" | tr -d '\r' | xargs)"
+  fi
+  if [ -z "${MAIN_DOMAIN:-}" ]; then
+    local d="${PUBLIC_APP_URL#*://}"
+    d="${d%%/*}"
+    d="${d%%:*}"
+    guess="${d#*.}"
+    if [ -z "${guess:-}" ] || [ "$guess" = "$d" ]; then
+      guess="$d"
+    fi
+    read -rp "MAIN_DOMAIN (base domain, untuk CORS/tenant) [${guess}]: " MAIN_DOMAIN
+    MAIN_DOMAIN="${MAIN_DOMAIN:-$guess}"
+    MAIN_DOMAIN="$(printf '%s' "$MAIN_DOMAIN" | tr -d '\r' | xargs)"
+  fi
+  export PUBLIC_APP_URL PUBLIC_INVOICE_BASE_URL MAIN_DOMAIN
+}
+
 prompt_public_urls_multi() {
   if [ "$MODE" != "multi" ]; then
     return 0
@@ -1618,6 +1659,7 @@ prompt_public_urls_multi() {
 
 if [ -t 0 ] && [ -t 1 ]; then
   prompt_public_urls_single
+  prompt_public_urls_single_no_nginx
   prompt_public_urls_multi
 fi
 
@@ -1739,7 +1781,7 @@ umask 077
 cat "$env_dir/env.common" "$env_dir/env.database" "$env_dir/env.redis" "$env_dir/env.production" > "$tmp_env" || true
 
 if [ "$RUN_MIGRATE" = "true" ]; then
-  if [ "$MODE" = "single" ]; then
+  if [ "$MODE" = "single" ] || [ "$MODE" = "single_no_nginx" ]; then
     $DOCKER_BIN compose -f "$COMPOSE_FILE" up -d postgres redis
     max_pg_wait=180
     waited_pg=0
@@ -1754,7 +1796,7 @@ if [ "$RUN_MIGRATE" = "true" ]; then
   fi
   $DOCKER_BIN build -t "$MIGRATE_IMAGE" --target build "$BACKEND_PATH" "${build_args[@]}"
   migrate_net_args=()
-  if [ "$MODE" = "single" ]; then
+  if [ "$MODE" = "single" ] || [ "$MODE" = "single_no_nginx" ]; then
     migrate_net_args+=(--network absenta-net)
   fi
   $DOCKER_BIN run --rm "${migrate_net_args[@]}" \

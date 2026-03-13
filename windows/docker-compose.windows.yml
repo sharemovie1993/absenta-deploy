@@ -22,6 +22,9 @@ services:
       - NODE_NAME=node-api
       - EMBEDDED_WORKERS=false
       - PM2_DISABLED=true
+      - MAIN_DOMAIN=${MAIN_DOMAIN:-}
+      - PUBLIC_APP_URL=${PUBLIC_APP_URL:-}
+      - PUBLIC_INVOICE_BASE_URL=${PUBLIC_INVOICE_BASE_URL:-}
       # Set DATABASE_URL via .env or override when running
     depends_on:
       - redis
@@ -39,6 +42,9 @@ services:
       - ../env/env.production
     environment:
       - NODE_NAME=node-api
+      - MAIN_DOMAIN=${MAIN_DOMAIN:-}
+      - PUBLIC_APP_URL=${PUBLIC_APP_URL:-}
+      - PUBLIC_INVOICE_BASE_URL=${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/infra.worker.js"]
     depends_on:
       - redis
@@ -54,6 +60,9 @@ services:
       - ../env/env.production
     environment:
       - NODE_NAME=node-billing
+      - MAIN_DOMAIN=${MAIN_DOMAIN:-}
+      - PUBLIC_APP_URL=${PUBLIC_APP_URL:-}
+      - PUBLIC_INVOICE_BASE_URL=${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/billing.worker.js"]
     depends_on:
       - redis
@@ -68,6 +77,9 @@ services:
       - ../env/env.production
     environment:
       - NODE_NAME=node-billing
+      - MAIN_DOMAIN=${MAIN_DOMAIN:-}
+      - PUBLIC_APP_URL=${PUBLIC_APP_URL:-}
+      - PUBLIC_INVOICE_BASE_URL=${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/notification.worker.js"]
     depends_on:
       - redis
@@ -83,6 +95,9 @@ services:
       - ../env/env.production
     environment:
       - NODE_NAME=node-attendance
+      - MAIN_DOMAIN=${MAIN_DOMAIN:-}
+      - PUBLIC_APP_URL=${PUBLIC_APP_URL:-}
+      - PUBLIC_INVOICE_BASE_URL=${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/attendance.worker.js"]
     depends_on:
       - redis
@@ -97,6 +112,9 @@ services:
       - ../env/env.production
     environment:
       - NODE_NAME=node-attendance
+      - MAIN_DOMAIN=${MAIN_DOMAIN:-}
+      - PUBLIC_APP_URL=${PUBLIC_APP_URL:-}
+      - PUBLIC_INVOICE_BASE_URL=${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/analytics.worker.js"]
     depends_on:
       - redis
@@ -111,6 +129,9 @@ services:
       - ../env/env.production
     environment:
       - NODE_NAME=node-attendance
+      - MAIN_DOMAIN=${MAIN_DOMAIN:-}
+      - PUBLIC_APP_URL=${PUBLIC_APP_URL:-}
+      - PUBLIC_INVOICE_BASE_URL=${PUBLIC_INVOICE_BASE_URL:-}
     command: ["node","dist/workers/maintenance.worker.js"]
     depends_on:
       - redis
@@ -126,6 +147,9 @@ services:
       - NODE_NAME=worker-agent
       - AGENT_HANDLE_ALL_NODES=true
       - AGENT_MAX_INSTANCES=10
+      - MAIN_DOMAIN=${MAIN_DOMAIN:-}
+      - PUBLIC_APP_URL=${PUBLIC_APP_URL:-}
+      - PUBLIC_INVOICE_BASE_URL=${PUBLIC_INVOICE_BASE_URL:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     command: ["node","dist/infra/control-agent.js"]
