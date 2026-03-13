@@ -56,6 +56,7 @@ services:
   frontend:
     image: absenta-frontend:latest
     container_name: absenta-frontend
+    profiles: ["with-frontend"]
     restart: unless-stopped
     environment:
       PORT: "8080"

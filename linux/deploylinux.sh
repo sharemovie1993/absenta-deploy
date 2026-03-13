@@ -19,6 +19,7 @@ GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 GITHUB_USERNAME="${GITHUB_USERNAME:-x-access-token}"
 NO_CACHE="${NO_CACHE:-false}"
 RUN_MIGRATE="${RUN_MIGRATE:-true}"
+RUN_SEED_ORIG="${RUN_SEED-__UNSET__}"
 RUN_SEED="${RUN_SEED:-false}"
 STACK_DOWN_FIRST="${STACK_DOWN_FIRST:-true}"
 MIGRATE_IMAGE="${MIGRATE_IMAGE:-absenta-backend-migrate:latest}"
@@ -192,7 +193,9 @@ if [ -z "$COMPOSE_FILE" ]; then
 fi
 
 if [ "$MODE" = "single_no_nginx" ]; then
-  DEPLOY_FRONTEND="true"
+  if [ -z "${DEPLOY_FRONTEND:-}" ]; then
+    DEPLOY_FRONTEND="true"
+  fi
   if [ -z "${SSL_ENABLED:-}" ]; then
     SSL_ENABLED="false"
   fi
@@ -1369,7 +1372,19 @@ load_multi_state
 load_backup_state
 
 if [ "$MODE" = "single_no_nginx" ]; then
-  DEPLOY_FRONTEND="true"
+  if [ -z "${DEPLOY_FRONTEND:-}" ]; then
+    DEPLOY_FRONTEND="true"
+  fi
+  if [ -t 0 ] && [ -t 1 ]; then
+    read -rp "Deploy frontend container juga? [Y/n]: " ans
+    case "$(printf '%s' "${ans:-}" | tr '[:upper:]' '[:lower:]')" in
+      n|no) DEPLOY_FRONTEND="false" ;;
+      *) DEPLOY_FRONTEND="true" ;;
+    esac
+  fi
+  if [ "${RUN_SEED_ORIG:-__UNSET__}" = "__UNSET__" ]; then
+    RUN_SEED="true"
+  fi
   SSL_ENABLED="false"
   DOMAIN=""
   HTTP_PORT=""
@@ -1745,10 +1760,15 @@ if [ "${DEPLOY_FRONTEND:-true}" = "true" ]; then
 fi
 
 export BACKEND_PATH
-$DOCKER_BIN compose -f "$COMPOSE_FILE" config >/dev/null
+compose_profile_args=()
+if [ "$MODE" = "single_no_nginx" ] && [ "${DEPLOY_FRONTEND:-true}" = "true" ]; then
+  compose_profile_args+=(--profile with-frontend)
+fi
+
+$DOCKER_BIN compose "${compose_profile_args[@]}" -f "$COMPOSE_FILE" config >/dev/null
 
 if [ "$STACK_DOWN_FIRST" = "true" ]; then
-  $DOCKER_BIN compose -f "$COMPOSE_FILE" down || true
+  $DOCKER_BIN compose "${compose_profile_args[@]}" -f "$COMPOSE_FILE" down || true
 fi
 
 build_args=()
@@ -1837,7 +1857,7 @@ if [ "$RUN_MIGRATE" = "true" ]; then
   fi
 fi
 
-$DOCKER_BIN compose -f "$COMPOSE_FILE" up -d --remove-orphans
+$DOCKER_BIN compose "${compose_profile_args[@]}" -f "$COMPOSE_FILE" up -d --remove-orphans
 $DOCKER_BIN ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
 
 setup_ssl_cron_single() {
