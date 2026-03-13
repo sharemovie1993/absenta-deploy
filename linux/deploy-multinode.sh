@@ -282,11 +282,15 @@ smb_mount_share() {
     echo "Butuh sudo untuk mount SMB."
     exit 1
   fi
-  if [ -f /etc/os-release ]; then
-    . /etc/os-release || true
-  fi
-  if [ "${ID:-}" = "ubuntu" ]; then
+  if is_cmd apt-get && is_cmd dpkg; then
     apt_ensure cifs-utils
+    apt_ensure keyutils
+    if is_cmd ldd && is_cmd mount.cifs; then
+      if ldd "$(command -v mount.cifs)" 2>/dev/null | grep -q "not found"; then
+        sudo apt-get update -y >/dev/null 2>&1 || true
+        sudo apt-get install -y --reinstall cifs-utils keyutils >/dev/null 2>&1 || true
+      fi
+    fi
   fi
 
   sudo mkdir -p "$BACKUP_SMB_MOUNT" >/dev/null 2>&1 || true
