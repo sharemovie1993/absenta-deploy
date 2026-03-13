@@ -362,6 +362,7 @@ download_latest_from_smb() {
   local cd_cmds
   cd_cmds="$(build_smbclient_cd_cmds "${BACKUP_SMB_SUBDIR:-}")"
 
+  echo "Mencari backup terbaru di SMB: ${BACKUP_SMB_SHARE} (subdir: ${BACKUP_SMB_SUBDIR:-/})"
   list_cmd="${cd_cmds}ls;"
   if [ -n "${BACKUP_SMB_DOMAIN:-}" ]; then
     list_out="$(smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$list_cmd" 2>/dev/null || true)"
@@ -379,23 +380,34 @@ download_latest_from_smb() {
     exit 1
   fi
 
+  echo "Ditemukan:"
+  echo "- DB: ${latest_db}"
+  echo "- CFG: ${latest_cfg}"
+  if [ -n "${latest_ssl:-}" ]; then
+    echo "- SSL: ${latest_ssl}"
+  fi
+
   get_db_cmd="${cd_cmds}get \"${latest_db}\" \"${out_dir}/${latest_db}\";"
   get_cfg_cmd="${cd_cmds}get \"${latest_cfg}\" \"${out_dir}/${latest_cfg}\";"
   if [ -n "${BACKUP_SMB_DOMAIN:-}" ]; then
-    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$get_db_cmd" >/dev/null 2>&1 || {
+    echo "Download DB dari SMB..."
+    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$get_db_cmd" || {
       echo "Gagal download DB dari SMB."
       exit 1
     }
-    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$get_cfg_cmd" >/dev/null 2>&1 || {
+    echo "Download config dari SMB..."
+    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$get_cfg_cmd" || {
       echo "Gagal download config dari SMB."
       exit 1
     }
   else
-    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$get_db_cmd" >/dev/null 2>&1 || {
+    echo "Download DB dari SMB..."
+    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$get_db_cmd" || {
       echo "Gagal download DB dari SMB."
       exit 1
     }
-    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$get_cfg_cmd" >/dev/null 2>&1 || {
+    echo "Download config dari SMB..."
+    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$get_cfg_cmd" || {
       echo "Gagal download config dari SMB."
       exit 1
     }
@@ -404,9 +416,11 @@ download_latest_from_smb() {
   if [ -n "${latest_ssl:-}" ]; then
     get_ssl_cmd="${cd_cmds}get \"${latest_ssl}\" \"${out_dir}/${latest_ssl}\";"
     if [ -n "${BACKUP_SMB_DOMAIN:-}" ]; then
-      smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$get_ssl_cmd" >/dev/null 2>&1 || true
+      echo "Download SSL (opsional) dari SMB..."
+      smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$get_ssl_cmd" || true
     else
-      smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$get_ssl_cmd" >/dev/null 2>&1 || true
+      echo "Download SSL (opsional) dari SMB..."
+      smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$get_ssl_cmd" || true
     fi
   fi
 
@@ -443,16 +457,19 @@ download_latest_from_ssh() {
     exit 1
   fi
 
-  scp "${scp_args[@]}" "${remote}:${BACKUP_REMOTE_DIR}/${latest_db}" "${out_dir}/${latest_db}" >/dev/null 2>&1 || {
+  echo "Download DB dari SSH remote..."
+  scp "${scp_args[@]}" "${remote}:${BACKUP_REMOTE_DIR}/${latest_db}" "${out_dir}/${latest_db}" || {
     echo "Gagal download DB dari SSH remote."
     exit 1
   }
-  scp "${scp_args[@]}" "${remote}:${BACKUP_REMOTE_DIR}/${latest_cfg}" "${out_dir}/${latest_cfg}" >/dev/null 2>&1 || {
+  echo "Download config dari SSH remote..."
+  scp "${scp_args[@]}" "${remote}:${BACKUP_REMOTE_DIR}/${latest_cfg}" "${out_dir}/${latest_cfg}" || {
     echo "Gagal download config dari SSH remote."
     exit 1
   }
   if [ -n "${latest_ssl:-}" ]; then
-    scp "${scp_args[@]}" "${remote}:${BACKUP_REMOTE_DIR}/${latest_ssl}" "${out_dir}/${latest_ssl}" >/dev/null 2>&1 || true
+    echo "Download SSL (opsional) dari SSH remote..."
+    scp "${scp_args[@]}" "${remote}:${BACKUP_REMOTE_DIR}/${latest_ssl}" "${out_dir}/${latest_ssl}" || true
   fi
   printf '%s\n' "${out_dir}/${latest_db}" "${out_dir}/${latest_cfg}" "${out_dir}/${latest_ssl}"
 }
@@ -499,6 +516,8 @@ restore_single_oneclick() {
   cfg_path=""
   ssl_path=""
 
+  echo ""
+  echo "[1/6] Mengambil backup terbaru..."
   if offsite_enabled; then
     case "${BACKUP_OFFSITE_METHOD:-none}" in
       smb)
@@ -535,7 +554,9 @@ restore_single_oneclick() {
     exit 1
   fi
 
-  sudo tar -xzf "$cfg_path" -C / >/dev/null 2>&1 || {
+  echo ""
+  echo "[2/6] Restore config dari backup..."
+  sudo tar -xzf "$cfg_path" -C / || {
     echo "Gagal restore config."
     exit 1
   }
@@ -549,7 +570,9 @@ restore_single_oneclick() {
   POSTGRES_USER="${POSTGRES_USER:-postgres}"
   POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
 
-  $DOCKER_BIN compose -f "$COMPOSE_FILE" up -d postgres redis >/dev/null 2>&1 || true
+  echo ""
+  echo "[3/6] Menyiapkan PostgreSQL container..."
+  $DOCKER_BIN compose -f "$COMPOSE_FILE" up -d postgres redis || true
   max_pg_wait=180
   waited_pg=0
   until $DOCKER_BIN exec absenta-postgres pg_isready -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-absensi}" >/dev/null 2>&1; do
@@ -558,31 +581,51 @@ restore_single_oneclick() {
       echo "PostgreSQL belum siap"
       exit 1
     fi
+    echo "Menunggu PostgreSQL siap... (${waited_pg}s)"
     sleep 5
   done
 
+  echo ""
+  echo "[4/6] Reset database target (DROP & CREATE)..."
   $DOCKER_BIN exec -e PGPASSWORD="$POSTGRES_PASSWORD" absenta-postgres \
     psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 \
     -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${POSTGRES_DB}' AND pid <> pg_backend_pid();" \
     -c "DROP DATABASE IF EXISTS \"${POSTGRES_DB}\";" \
-    -c "CREATE DATABASE \"${POSTGRES_DB}\";" >/dev/null 2>&1 || {
+    -c "CREATE DATABASE \"${POSTGRES_DB}\";" || {
       echo "Gagal reset database."
       exit 1
     }
 
-  gunzip -c "$db_path" | $DOCKER_BIN exec -i -e PGPASSWORD="$POSTGRES_PASSWORD" absenta-postgres \
-    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 >/dev/null 2>&1 || {
-      echo "Gagal restore database."
-      exit 1
-    }
+  echo ""
+  echo "[5/6] Restore database dari dump (ini bisa lama)..."
+  if ! is_cmd pv && is_cmd apt-get && is_cmd dpkg; then
+    apt_ensure pv
+  fi
+  if is_cmd pv; then
+    gunzip -c "$db_path" | pv | $DOCKER_BIN exec -i -e PGPASSWORD="$POSTGRES_PASSWORD" absenta-postgres \
+      psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 || {
+        echo "Gagal restore database."
+        exit 1
+      }
+  else
+    gunzip -c "$db_path" | $DOCKER_BIN exec -i -e PGPASSWORD="$POSTGRES_PASSWORD" absenta-postgres \
+      psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 || {
+        echo "Gagal restore database."
+        exit 1
+      }
+  fi
 
   if [ -n "${ssl_path:-}" ] && [ -f "$ssl_path" ]; then
+    echo ""
+    echo "Restore SSL (opsional)..."
     $DOCKER_BIN volume create absenta-letsencrypt >/dev/null 2>&1 || true
     $DOCKER_BIN run --rm -v absenta-letsencrypt:/data -v "$restore_dir:/backup" bash:5 \
       sh -lc "rm -rf /data/* 2>/dev/null || true; tar -xzf \"/backup/$(basename "$ssl_path")\" -C /data" >/dev/null 2>&1 || true
   fi
 
   script_path="$DIR/$(basename "$0")"
+  echo ""
+  echo "[6/6] Menjalankan deploy untuk start semua service..."
   MODE=single ACTION=deploy RUN_MIGRATE=false RUN_SEED=false STACK_DOWN_FIRST=false /usr/bin/env bash "$script_path"
 }
 
