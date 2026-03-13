@@ -307,15 +307,61 @@ smb_mount_share() {
     exit 1
   fi
 
-  smb_opts="credentials=${BACKUP_SMB_CREDENTIALS_FILE},iocharset=utf8,vers=3.0,file_mode=0600,dir_mode=0700,noperm"
-  if [ -n "${BACKUP_SMB_DOMAIN:-}" ]; then
-    smb_opts="${smb_opts},domain=${BACKUP_SMB_DOMAIN}"
+  if [[ "${BACKUP_SMB_SHARE:-}" =~ ^//[^/]+/[^/]+/.+ ]]; then
+    tmp_share="${BACKUP_SMB_SHARE#//}"
+    smb_host="${tmp_share%%/*}"
+    smb_rest="${tmp_share#*/}"
+    smb_share="${smb_rest%%/*}"
+    smb_extra=""
+    if [ "$smb_rest" != "$smb_share" ]; then
+      smb_extra="${smb_rest#*/}"
+      smb_extra="${smb_extra#/}"
+      smb_extra="${smb_extra%/}"
+    fi
+    BACKUP_SMB_SHARE="//${smb_host}/${smb_share}"
+    if [ -n "${smb_extra:-}" ]; then
+      if [ -n "${BACKUP_SMB_SUBDIR:-}" ]; then
+        BACKUP_SMB_SUBDIR="${smb_extra}/${BACKUP_SMB_SUBDIR}"
+      else
+        BACKUP_SMB_SUBDIR="${smb_extra}"
+      fi
+    fi
   fi
 
-  sudo mount -t cifs "$BACKUP_SMB_SHARE" "$BACKUP_SMB_MOUNT" -o "$smb_opts" >/dev/null 2>&1 || {
+  smb_opts_base="credentials=${BACKUP_SMB_CREDENTIALS_FILE},iocharset=utf8,file_mode=0600,dir_mode=0700,noperm,serverino"
+  if [ -n "${BACKUP_SMB_DOMAIN:-}" ]; then
+    smb_opts_base="${smb_opts_base},domain=${BACKUP_SMB_DOMAIN}"
+  fi
+  smb_opts_base="${smb_opts_base},mfsymlinks"
+
+  mount_err="/tmp/absenta-smb-mount.err.$$"
+  : > "$mount_err" || true
+  mounted="false"
+  for vers in 3.1.1 3.0 2.1 2.0 1.0; do
+    for sec in ntlmssp ntlm ""; do
+      smb_opts="${smb_opts_base},vers=${vers}"
+      if [ -n "${sec:-}" ]; then
+        smb_opts="${smb_opts},sec=${sec}"
+      fi
+      sudo mount -t cifs "$BACKUP_SMB_SHARE" "$BACKUP_SMB_MOUNT" -o "$smb_opts" 2> "$mount_err" && {
+        mounted="true"
+        break
+      }
+    done
+    if [ "$mounted" = "true" ]; then
+      break
+    fi
+  done
+
+  if [ "$mounted" != "true" ]; then
     echo "Gagal mount SMB share."
+    if [ -s "$mount_err" ]; then
+      echo "Detail:"
+      tail -n 8 "$mount_err" || true
+    fi
+    echo "Share yang dipakai: ${BACKUP_SMB_SHARE}"
     exit 1
-  }
+  fi
 }
 
 sync_files_to_smb() {
