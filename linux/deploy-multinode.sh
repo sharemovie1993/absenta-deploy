@@ -39,6 +39,7 @@ BACKUP_SMB_MOUNT="${BACKUP_SMB_MOUNT:-/mnt/absenta-backup}"
 BACKUP_SMB_SUBDIR="${BACKUP_SMB_SUBDIR:-absenta}"
 BACKUP_SMB_CREDENTIALS_FILE="${BACKUP_SMB_CREDENTIALS_FILE:-/etc/absenta/smb-backup.cred}"
 BACKUP_SMB_DOMAIN="${BACKUP_SMB_DOMAIN:-}"
+BACKUP_SMB_MODE="${BACKUP_SMB_MODE:-smbclient}"
 SSL_ENABLED="${SSL_ENABLED:-}"
 DOMAIN="${DOMAIN:-}"
 MAIN_DOMAIN="${MAIN_DOMAIN:-}"
@@ -236,6 +237,65 @@ smb_offsite_enabled() {
   [ "${BACKUP_OFFSITE_METHOD:-none}" = "smb" ] && [ -n "${BACKUP_SMB_SHARE:-}" ]
 }
 
+ensure_smbclient() {
+  if is_cmd apt-get && is_cmd dpkg; then
+    apt_ensure smbclient
+  fi
+  if ! is_cmd smbclient; then
+    echo "smbclient belum tersedia."
+    exit 1
+  fi
+}
+
+build_smbclient_cd_mkdir_cmds() {
+  local subdir="$1"
+  if [ -z "${subdir:-}" ]; then
+    return 0
+  fi
+  local acc=""
+  IFS='/' read -r -a parts <<< "$subdir"
+  for p in "${parts[@]}"; do
+    if [ -z "${p:-}" ]; then
+      continue
+    fi
+    acc="${acc}${p}"
+    printf 'mkdir "%s";' "$acc"
+    printf 'cd "%s";' "$acc"
+    acc="${acc}/"
+  done
+}
+
+sync_files_to_smbclient() {
+  if ! smb_offsite_enabled; then
+    return 0
+  fi
+  ensure_smbclient
+  if [ ! -f "$BACKUP_SMB_CREDENTIALS_FILE" ]; then
+    echo "Credentials SMB tidak ditemukan: $BACKUP_SMB_CREDENTIALS_FILE"
+    exit 1
+  fi
+
+  smb_base_cmd=""
+  smb_base_cmd="$(build_smbclient_cd_mkdir_cmds "${BACKUP_SMB_SUBDIR:-}")"
+
+  for f in "$@"; do
+    if [ -f "$f" ]; then
+      smb_cmd="${smb_base_cmd}put \"${f}\" \"$(basename "$f")\";"
+      if [ -n "${BACKUP_SMB_DOMAIN:-}" ]; then
+        smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$smb_cmd" >/dev/null 2>&1 || {
+          echo "Gagal upload backup ke SMB (smbclient)."
+          exit 1
+        }
+      else
+        smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$smb_cmd" >/dev/null 2>&1 || {
+          echo "Gagal upload backup ke SMB (smbclient)."
+          exit 1
+        }
+      fi
+    fi
+  done
+}
+
 sync_files_to_ssh() {
   if ! ssh_offsite_enabled; then
     return 0
@@ -406,6 +466,10 @@ sync_files_to_smb() {
   if ! smb_offsite_enabled; then
     return 0
   fi
+  if [ "${BACKUP_SMB_MODE:-smbclient}" = "smbclient" ]; then
+    sync_files_to_smbclient "$@"
+    return 0
+  fi
   smb_mount_share
 
   sudo mkdir -p "$BACKUP_SMB_MOUNT/$BACKUP_SMB_SUBDIR" >/dev/null 2>&1 || true
@@ -508,6 +572,14 @@ setup_backup_remote() {
   if [ "$BACKUP_OFFSITE_METHOD" = "smb" ]; then
     read -rp "SMB: Share (contoh: //10.10.10.10/backup) (tanpa subfolder) [${BACKUP_SMB_SHARE}]: " v
     BACKUP_SMB_SHARE="${v:-$BACKUP_SMB_SHARE}"
+    echo "SMB: Mode akses:"
+    echo "  1) smbclient (disarankan, tanpa mount)"
+    echo "  2) mount.cifs (butuh kernel CIFS & library lengkap)"
+    read -rp "Pilih [1/2] [1]: " v
+    case "${v:-1}" in
+      2) BACKUP_SMB_MODE="mount" ;;
+      *) BACKUP_SMB_MODE="smbclient" ;;
+    esac
     read -rp "SMB: Folder tujuan di dalam share [${BACKUP_SMB_SUBDIR}]: " v
     BACKUP_SMB_SUBDIR="${v:-$BACKUP_SMB_SUBDIR}"
     read -rp "SMB: Domain (opsional, kosong jika tidak ada) [${BACKUP_SMB_DOMAIN}]: " v
@@ -530,7 +602,7 @@ setup_backup_remote() {
     sudo chmod 600 "$BACKUP_SMB_CREDENTIALS_FILE" >/dev/null 2>&1 || true
   fi
 
-  export BACKUP_DIR BACKUP_RETENTION_DAYS BACKUP_OFFSITE_METHOD BACKUP_REMOTE_HOST BACKUP_REMOTE_USER BACKUP_REMOTE_PORT BACKUP_REMOTE_DIR BACKUP_REMOTE_KEY BACKUP_SMB_SHARE BACKUP_SMB_MOUNT BACKUP_SMB_SUBDIR BACKUP_SMB_CREDENTIALS_FILE BACKUP_SMB_DOMAIN
+  export BACKUP_DIR BACKUP_RETENTION_DAYS BACKUP_OFFSITE_METHOD BACKUP_REMOTE_HOST BACKUP_REMOTE_USER BACKUP_REMOTE_PORT BACKUP_REMOTE_DIR BACKUP_REMOTE_KEY BACKUP_SMB_SHARE BACKUP_SMB_MODE BACKUP_SMB_MOUNT BACKUP_SMB_SUBDIR BACKUP_SMB_CREDENTIALS_FILE BACKUP_SMB_DOMAIN
   save_backup_state
   echo "Setup backup remote tersimpan: $BACKUP_STATE_FILE"
 }
@@ -655,7 +727,7 @@ install_backup_cron() {
   cat <<EOF | sudo tee /etc/cron.d/absenta-backup >/dev/null
 SHELL=/bin/bash
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
-30 2 * * * root MODE=single ACTION=backup_single BACKUP_DIR=${BACKUP_DIR} BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS} BACKUP_OFFSITE_METHOD=${BACKUP_OFFSITE_METHOD} BACKUP_REMOTE_HOST=${BACKUP_REMOTE_HOST} BACKUP_REMOTE_USER=${BACKUP_REMOTE_USER} BACKUP_REMOTE_PORT=${BACKUP_REMOTE_PORT} BACKUP_REMOTE_DIR=${BACKUP_REMOTE_DIR} BACKUP_REMOTE_KEY=${BACKUP_REMOTE_KEY} BACKUP_SMB_SHARE=${BACKUP_SMB_SHARE} BACKUP_SMB_MOUNT=${BACKUP_SMB_MOUNT} BACKUP_SMB_SUBDIR=${BACKUP_SMB_SUBDIR} BACKUP_SMB_CREDENTIALS_FILE=${BACKUP_SMB_CREDENTIALS_FILE} BACKUP_SMB_DOMAIN=${BACKUP_SMB_DOMAIN} /usr/bin/env bash ${script_path} >/var/log/absenta-backup.log 2>&1
+30 2 * * * root MODE=single ACTION=backup_single BACKUP_DIR=${BACKUP_DIR} BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS} BACKUP_OFFSITE_METHOD=${BACKUP_OFFSITE_METHOD} BACKUP_REMOTE_HOST=${BACKUP_REMOTE_HOST} BACKUP_REMOTE_USER=${BACKUP_REMOTE_USER} BACKUP_REMOTE_PORT=${BACKUP_REMOTE_PORT} BACKUP_REMOTE_DIR=${BACKUP_REMOTE_DIR} BACKUP_REMOTE_KEY=${BACKUP_REMOTE_KEY} BACKUP_SMB_SHARE=${BACKUP_SMB_SHARE} BACKUP_SMB_MOUNT=${BACKUP_SMB_MOUNT} BACKUP_SMB_MODE=${BACKUP_SMB_MODE} BACKUP_SMB_SUBDIR=${BACKUP_SMB_SUBDIR} BACKUP_SMB_CREDENTIALS_FILE=${BACKUP_SMB_CREDENTIALS_FILE} BACKUP_SMB_DOMAIN=${BACKUP_SMB_DOMAIN} /usr/bin/env bash ${script_path} >/var/log/absenta-backup.log 2>&1
 EOF
   sudo chmod 644 /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
   sudo systemctl enable --now cron >/dev/null 2>&1 || true
@@ -826,6 +898,7 @@ load_backup_state() {
   BACKUP_OFFSITE_METHOD="$(printf '%s' "${BACKUP_OFFSITE_METHOD:-}" | tr -d '\r' | xargs)"
   BACKUP_SMB_SHARE="$(printf '%s' "${BACKUP_SMB_SHARE:-}" | tr -d '\r' | xargs)"
   BACKUP_SMB_MOUNT="$(printf '%s' "${BACKUP_SMB_MOUNT:-}" | tr -d '\r' | xargs)"
+  BACKUP_SMB_MODE="$(printf '%s' "${BACKUP_SMB_MODE:-}" | tr -d '\r' | xargs)"
   BACKUP_SMB_SUBDIR="$(printf '%s' "${BACKUP_SMB_SUBDIR:-}" | tr -d '\r' | xargs)"
   BACKUP_SMB_CREDENTIALS_FILE="$(printf '%s' "${BACKUP_SMB_CREDENTIALS_FILE:-}" | tr -d '\r' | xargs)"
   BACKUP_SMB_DOMAIN="$(printf '%s' "${BACKUP_SMB_DOMAIN:-}" | tr -d '\r' | xargs)"
@@ -849,6 +922,7 @@ save_backup_state() {
     echo "BACKUP_REMOTE_KEY=${BACKUP_REMOTE_KEY:-}"
     echo "BACKUP_SMB_SHARE=${BACKUP_SMB_SHARE:-}"
     echo "BACKUP_SMB_MOUNT=${BACKUP_SMB_MOUNT:-}"
+    echo "BACKUP_SMB_MODE=${BACKUP_SMB_MODE:-smbclient}"
     echo "BACKUP_SMB_SUBDIR=${BACKUP_SMB_SUBDIR:-}"
     echo "BACKUP_SMB_CREDENTIALS_FILE=${BACKUP_SMB_CREDENTIALS_FILE:-}"
     echo "BACKUP_SMB_DOMAIN=${BACKUP_SMB_DOMAIN:-}"
