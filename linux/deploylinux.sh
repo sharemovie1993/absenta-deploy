@@ -1401,6 +1401,11 @@ prompt_github_token() {
   if [ -z "${GITHUB_USERNAME:-}" ]; then
     GITHUB_USERNAME="x-access-token"
   fi
+  if [ -z "${GITHUB_TOKEN:-}" ] && [ -n "${TOKEN_GIT:-}" ]; then
+    GITHUB_TOKEN="$(printf '%s' "$TOKEN_GIT" | tr -d '\r' | xargs)"
+    GITHUB_TOKEN="${GITHUB_TOKEN#\"}"; GITHUB_TOKEN="${GITHUB_TOKEN%\"}"
+    GITHUB_TOKEN="${GITHUB_TOKEN#\'}"; GITHUB_TOKEN="${GITHUB_TOKEN%\'}"
+  fi
   if [ -z "${GITHUB_TOKEN:-}" ] && [ -f "${TOKEN_GIT_ENV_FILE:-}" ]; then
     tokLine="$(grep -E '^[[:space:]]*TOKEN_GIT=' "$TOKEN_GIT_ENV_FILE" | tail -n 1 || true)"
     if [ -n "${tokLine:-}" ]; then
