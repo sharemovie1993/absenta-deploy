@@ -368,6 +368,7 @@ download_latest_from_smb() {
   else
     list_out="$(smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$list_cmd" 2>/dev/null || true)"
   fi
+  list_out="$(printf '%s' "$list_out" | tr -d '\r')"
 
   latest_db="$(printf '%s\n' "$list_out" | awk '{print $1}' | grep -E '^absenta-db-.*\.sql\.gz$' | sort | tail -n 1 || true)"
   latest_cfg="$(printf '%s\n' "$list_out" | awk '{print $1}' | grep -E '^absenta-config-.*\.tar\.gz$' | sort | tail -n 1 || true)"
@@ -433,6 +434,7 @@ download_latest_from_ssh() {
   fi
 
   files="$(ssh "${ssh_args[@]}" "$remote" "ls -1 ${BACKUP_REMOTE_DIR} 2>/dev/null || true" 2>/dev/null || true)"
+  files="$(printf '%s' "$files" | tr -d '\r')"
   latest_db="$(printf '%s\n' "$files" | grep -E '^absenta-db-.*\.sql\.gz$' | sort | tail -n 1 || true)"
   latest_cfg="$(printf '%s\n' "$files" | grep -E '^absenta-config-.*\.tar\.gz$' | sort | tail -n 1 || true)"
   latest_ssl="$(printf '%s\n' "$files" | grep -E '^absenta-letsencrypt-.*\.tar\.gz$' | sort | tail -n 1 || true)"
@@ -518,9 +520,18 @@ restore_single_oneclick() {
     cfg_path="${p[1]:-}"
     ssl_path="${p[2]:-}"
   fi
+  db_path="$(printf '%s' "${db_path:-}" | tr -d '\r' | xargs)"
+  cfg_path="$(printf '%s' "${cfg_path:-}" | tr -d '\r' | xargs)"
+  ssl_path="$(printf '%s' "${ssl_path:-}" | tr -d '\r' | xargs)"
 
   if [ ! -f "$db_path" ] || [ ! -f "$cfg_path" ]; then
     echo "File backup tidak lengkap."
+    echo "DB: ${db_path:-<kosong>}"
+    echo "CFG: ${cfg_path:-<kosong>}"
+    if [ -d "$restore_dir" ]; then
+      echo "Isi folder restore:"
+      ls -lah "$restore_dir" 2>/dev/null || true
+    fi
     exit 1
   fi
 
