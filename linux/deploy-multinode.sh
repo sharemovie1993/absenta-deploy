@@ -285,11 +285,25 @@ smb_mount_share() {
   if is_cmd apt-get && is_cmd dpkg; then
     apt_ensure cifs-utils
     apt_ensure keyutils
+    apt_ensure libcap2 || true
+    apt_ensure libkeyutils1 || true
+    apt_ensure libtalloc2 || true
+    apt_ensure libwbclient0 || true
     if is_cmd ldd && is_cmd mount.cifs; then
       if ldd "$(command -v mount.cifs)" 2>/dev/null | grep -q "not found"; then
         sudo apt-get update -y >/dev/null 2>&1 || true
-        sudo apt-get install -y --reinstall cifs-utils keyutils >/dev/null 2>&1 || true
+        sudo apt-get install -y --reinstall cifs-utils keyutils libcap2 libkeyutils1 libtalloc2 libwbclient0 >/dev/null 2>&1 || true
+        sudo ldconfig >/dev/null 2>&1 || true
       fi
+    fi
+  fi
+
+  if is_cmd ldd && is_cmd mount.cifs; then
+    if ldd "$(command -v mount.cifs)" 2>/dev/null | grep -q "not found"; then
+      echo "mount.cifs masih kekurangan library (error(79))."
+      echo "Detail:"
+      ldd "$(command -v mount.cifs)" 2>/dev/null | tail -n 20 || true
+      exit 1
     fi
   fi
 
