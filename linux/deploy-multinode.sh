@@ -25,6 +25,8 @@ MIGRATE_IMAGE="${MIGRATE_IMAGE:-absenta-backend-migrate:latest}"
 SINGLE_STATE_FILE="${SINGLE_STATE_FILE:-/etc/absenta/single.env}"
 MULTI_STATE_FILE="${MULTI_STATE_FILE:-/etc/absenta/multi.env}"
 TOKEN_GIT_ENV_FILE="${TOKEN_GIT_ENV_FILE:-/etc/absenta/tokengit.env}"
+BACKUP_DIR="${BACKUP_DIR:-/var/backups/absenta}"
+BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
 SSL_ENABLED="${SSL_ENABLED:-}"
 DOMAIN="${DOMAIN:-}"
 MAIN_DOMAIN="${MAIN_DOMAIN:-}"
@@ -121,6 +123,9 @@ select_main_menu() {
   echo "12) Start layanan web VPS (nginx/apache) (kembalikan port 80/443)"
   echo "13) Stop layanan web VPS (nginx/apache)"
   echo "14) Uninstall ABSENTA total (hapus container+volume+image+config+cron)"
+  echo "15) Backup SINGLE sekarang (DB+config+SSL)"
+  echo "16) Pasang/Update cron backup harian (SINGLE)"
+  echo "17) Lihat daftar backup (SINGLE)"
   echo "0) Keluar"
   read -rp "Pilih: " opt
   case "${opt:-}" in
@@ -138,6 +143,9 @@ select_main_menu() {
     12) ACTION="start_web" ;;
     13) ACTION="stop_web" ;;
     14) ACTION="uninstall" ;;
+    15) ACTION="backup_single"; MODE="single" ;;
+    16) ACTION="install_backup_cron"; MODE="single" ;;
+    17) ACTION="list_backups"; MODE="single" ;;
     0) exit 0 ;;
     *) ACTION="deploy"; MODE="multi" ;;
   esac
@@ -183,6 +191,147 @@ port_in_use() {
     ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq "(:|\\.)${port}\$" && return 0
   fi
   return 1
+}
+
+ensure_backup_dir() {
+  if [ -z "${BACKUP_DIR:-}" ]; then
+    echo "BACKUP_DIR belum diset"
+    exit 1
+  fi
+  if is_cmd sudo; then
+    sudo mkdir -p "$BACKUP_DIR" >/dev/null 2>&1 || true
+    sudo chmod 700 "$BACKUP_DIR" >/dev/null 2>&1 || true
+  else
+    mkdir -p "$BACKUP_DIR" >/dev/null 2>&1 || true
+    chmod 700 "$BACKUP_DIR" >/dev/null 2>&1 || true
+  fi
+}
+
+backup_single() {
+  if [ "$MODE" != "single" ]; then
+    echo "Backup ini hanya untuk MODE=single"
+    exit 1
+  fi
+  ensure_backup_dir
+
+  local stamp
+  stamp="$(date +%Y%m%d-%H%M%S)"
+
+  local tmp_db="/tmp/absenta-db-${stamp}.sql.gz"
+  local tmp_cfg="/tmp/absenta-config-${stamp}.tar.gz"
+  local tmp_ssl="/tmp/absenta-letsencrypt-${stamp}.tar.gz"
+  umask 077
+
+  if [ -f "$SINGLE_STATE_FILE" ]; then
+    set -a
+    . "$SINGLE_STATE_FILE" || true
+    set +a
+  fi
+  POSTGRES_DB="${POSTGRES_DB:-absensi}"
+  POSTGRES_USER="${POSTGRES_USER:-postgres}"
+  POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
+
+  $DOCKER_BIN compose -f "$COMPOSE_FILE" up -d postgres >/dev/null 2>&1 || true
+
+  if $DOCKER_BIN ps --format "{{.Names}}" | grep -qx "absenta-postgres"; then
+    $DOCKER_BIN exec -e PGPASSWORD="$POSTGRES_PASSWORD" absenta-postgres \
+      pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" | gzip -c > "$tmp_db"
+  else
+    echo "Container absenta-postgres tidak ditemukan."
+    exit 1
+  fi
+
+  if is_cmd sudo; then
+    sudo tar -czf "$tmp_cfg" \
+      /etc/absenta/single.env \
+      /etc/absenta/multi.env \
+      /etc/absenta/tokengit.env \
+      /etc/cron.d/absenta-certbot \
+      /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
+  else
+    tar -czf "$tmp_cfg" \
+      /etc/absenta/single.env \
+      /etc/absenta/multi.env \
+      /etc/absenta/tokengit.env \
+      /etc/cron.d/absenta-certbot \
+      /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
+  fi
+
+  if $DOCKER_BIN volume ls --format "{{.Name}}" | grep -qx "absenta-letsencrypt"; then
+    $DOCKER_BIN run --rm -v absenta-letsencrypt:/data -v /tmp:/backup bash:5 \
+      tar -czf "/backup/$(basename "$tmp_ssl")" -C /data . >/dev/null 2>&1 || true
+  fi
+
+  if is_cmd sudo; then
+    sudo mv -f "$tmp_db" "$BACKUP_DIR/" >/dev/null 2>&1 || true
+    sudo mv -f "$tmp_cfg" "$BACKUP_DIR/" >/dev/null 2>&1 || true
+    if [ -f "$tmp_ssl" ]; then
+      sudo mv -f "$tmp_ssl" "$BACKUP_DIR/" >/dev/null 2>&1 || true
+    fi
+    sudo chmod 600 "$BACKUP_DIR/$(basename "$tmp_db")" "$BACKUP_DIR/$(basename "$tmp_cfg")" >/dev/null 2>&1 || true
+    if [ -f "$BACKUP_DIR/$(basename "$tmp_ssl")" ]; then
+      sudo chmod 600 "$BACKUP_DIR/$(basename "$tmp_ssl")" >/dev/null 2>&1 || true
+    fi
+  else
+    mv -f "$tmp_db" "$BACKUP_DIR/" >/dev/null 2>&1 || true
+    mv -f "$tmp_cfg" "$BACKUP_DIR/" >/dev/null 2>&1 || true
+    if [ -f "$tmp_ssl" ]; then
+      mv -f "$tmp_ssl" "$BACKUP_DIR/" >/dev/null 2>&1 || true
+    fi
+    chmod 600 "$BACKUP_DIR/$(basename "$tmp_db")" "$BACKUP_DIR/$(basename "$tmp_cfg")" >/dev/null 2>&1 || true
+    if [ -f "$BACKUP_DIR/$(basename "$tmp_ssl")" ]; then
+      chmod 600 "$BACKUP_DIR/$(basename "$tmp_ssl")" >/dev/null 2>&1 || true
+    fi
+  fi
+
+  if [ -n "${BACKUP_RETENTION_DAYS:-}" ]; then
+    if is_cmd sudo; then
+      sudo find "$BACKUP_DIR" -type f -name "absenta-*" -mtime +"$BACKUP_RETENTION_DAYS" -delete >/dev/null 2>&1 || true
+    else
+      find "$BACKUP_DIR" -type f -name "absenta-*" -mtime +"$BACKUP_RETENTION_DAYS" -delete >/dev/null 2>&1 || true
+    fi
+  fi
+
+  echo "Backup selesai: $BACKUP_DIR"
+}
+
+install_backup_cron() {
+  if [ "$MODE" != "single" ]; then
+    echo "Cron backup ini hanya untuk MODE=single"
+    exit 1
+  fi
+  if ! is_cmd sudo; then
+    echo "Butuh sudo untuk pasang cron backup."
+    exit 1
+  fi
+  sudo apt-get update -y >/dev/null 2>&1 || true
+  sudo apt-get install -y cron >/dev/null 2>&1 || true
+
+  ensure_backup_dir
+  local script_path
+  script_path="$DIR/$(basename "$0")"
+
+  cat <<EOF | sudo tee /etc/cron.d/absenta-backup >/dev/null
+SHELL=/bin/bash
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+30 2 * * * root MODE=single ACTION=backup_single BACKUP_DIR=${BACKUP_DIR} BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS} /usr/bin/env bash ${script_path} >/var/log/absenta-backup.log 2>&1
+EOF
+  sudo chmod 644 /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
+  sudo systemctl enable --now cron >/dev/null 2>&1 || true
+  echo "Cron backup terpasang: /etc/cron.d/absenta-backup"
+}
+
+list_backups() {
+  if [ "$MODE" != "single" ]; then
+    echo "List backup ini hanya untuk MODE=single"
+    exit 1
+  fi
+  ensure_backup_dir
+  if is_cmd sudo; then
+    sudo ls -lah "$BACKUP_DIR" | tail -n +1
+  else
+    ls -lah "$BACKUP_DIR" | tail -n +1
+  fi
 }
 
 prompt_ports() {
@@ -281,9 +430,9 @@ run_non_deploy_action() {
       $DOCKER_BIN network rm absenta-net >/dev/null 2>&1 || true
 
       if is_cmd sudo; then
-        sudo rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/github.token /etc/absenta/tokengit.env /etc/cron.d/absenta-certbot >/dev/null 2>&1 || true
+        sudo rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/github.token /etc/absenta/tokengit.env /etc/cron.d/absenta-certbot /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
       else
-        rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/github.token /etc/absenta/tokengit.env /etc/cron.d/absenta-certbot >/dev/null 2>&1 || true
+        rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/github.token /etc/absenta/tokengit.env /etc/cron.d/absenta-certbot /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
       fi
       rm -f "$DIR/../env/.env.tokengit" >/dev/null 2>&1 || true
 
@@ -295,6 +444,18 @@ run_non_deploy_action() {
       fi
 
       echo "Uninstall ABSENTA selesai."
+      exit 0
+      ;;
+    backup_single)
+      backup_single
+      exit 0
+      ;;
+    install_backup_cron)
+      install_backup_cron
+      exit 0
+      ;;
+    list_backups)
+      list_backups
       exit 0
       ;;
   esac
