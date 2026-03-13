@@ -355,20 +355,40 @@ smb_mount_share() {
   mount_err="/tmp/absenta-smb-mount.err.$$"
   : > "$mount_err" || true
   mounted="false"
-  for vers in 3.1.1 3.0 2.1 2.0 1.0; do
-    for sec in ntlmssp ntlm ""; do
-      smb_opts="${smb_opts_base},vers=${vers}"
-      if [ -n "${sec:-}" ]; then
-        smb_opts="${smb_opts},sec=${sec}"
-      fi
-      sudo mount -t cifs "$BACKUP_SMB_SHARE" "$BACKUP_SMB_MOUNT" -o "$smb_opts" 2> "$mount_err" && {
-        mounted="true"
+  retried_libs="false"
+  while true; do
+    mounted="false"
+    for vers in 3.1.1 3.0 2.1 2.0 1.0; do
+      for sec in ntlmssp ntlm ""; do
+        smb_opts="${smb_opts_base},vers=${vers}"
+        if [ -n "${sec:-}" ]; then
+          smb_opts="${smb_opts},sec=${sec}"
+        fi
+        sudo mount -t cifs "$BACKUP_SMB_SHARE" "$BACKUP_SMB_MOUNT" -o "$smb_opts" 2> "$mount_err" && {
+          mounted="true"
+          break
+        }
+      done
+      if [ "$mounted" = "true" ]; then
         break
-      }
+      fi
     done
+
     if [ "$mounted" = "true" ]; then
       break
     fi
+
+    if [ "$retried_libs" = "false" ] && grep -qi "mount error(79)" "$mount_err" 2>/dev/null; then
+      retried_libs="true"
+      if is_cmd apt-get && is_cmd dpkg; then
+        sudo apt-get update -y >/dev/null 2>&1 || true
+        sudo apt-get install -y --reinstall cifs-utils keyutils libcap2 libkeyutils1 libtalloc2 libwbclient0 >/dev/null 2>&1 || true
+        sudo ldconfig >/dev/null 2>&1 || true
+        : > "$mount_err" || true
+        continue
+      fi
+    fi
+    break
   done
 
   if [ "$mounted" != "true" ]; then
