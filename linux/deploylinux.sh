@@ -1368,6 +1368,14 @@ load_single_state
 load_multi_state
 load_backup_state
 
+if [ "$MODE" = "single_no_nginx" ]; then
+  DEPLOY_FRONTEND="true"
+  SSL_ENABLED="false"
+  DOMAIN=""
+  HTTP_PORT=""
+  HTTPS_PORT=""
+fi
+
 if [ -t 0 ] && [ -t 1 ]; then
   if [ "$MODE" != "single_no_nginx" ]; then
     prompt_ports
