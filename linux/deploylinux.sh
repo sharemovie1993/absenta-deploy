@@ -192,7 +192,7 @@ if [ -z "$COMPOSE_FILE" ]; then
 fi
 
 if [ "$MODE" = "single_no_nginx" ]; then
-  DEPLOY_FRONTEND="false"
+  DEPLOY_FRONTEND="true"
   if [ -z "${SSL_ENABLED:-}" ]; then
     SSL_ENABLED="false"
   fi
@@ -1751,24 +1751,38 @@ $DOCKER_BIN compose -f "$COMPOSE_FILE" build "${build_args[@]}"
 
 if [ "${DEPLOY_FRONTEND:-true}" = "true" ]; then
   vite_api="${PUBLIC_APP_URL%/}/api"
-  socket_scheme="ws"
-  socket_port="${HTTP_PORT:-80}"
-  if [ "$SSL_ENABLED" = "true" ]; then
-    socket_scheme="wss"
-    socket_port="${HTTPS_PORT:-443}"
-  fi
-  socket_host="${DOMAIN:-localhost}"
-  socket_port_part=""
-  if [ "$socket_scheme" = "wss" ]; then
-    if [ -n "${socket_port:-}" ] && [ "$socket_port" != "443" ]; then
-      socket_port_part=":${socket_port}"
+  if [ "$MODE" = "single_no_nginx" ]; then
+    pub="${PUBLIC_APP_URL:-}"
+    pub="${pub%/}"
+    pub_scheme="${pub%%://*}"
+    rest="${pub#*://}"
+    hostport="${rest%%/*}"
+    if [ "$pub_scheme" = "https" ]; then
+      socket_scheme="wss"
+    else
+      socket_scheme="ws"
     fi
+    vite_socket="${socket_scheme}://${hostport}"
   else
-    if [ -n "${socket_port:-}" ] && [ "$socket_port" != "80" ]; then
-      socket_port_part=":${socket_port}"
+    socket_scheme="ws"
+    socket_port="${HTTP_PORT:-80}"
+    if [ "$SSL_ENABLED" = "true" ]; then
+      socket_scheme="wss"
+      socket_port="${HTTPS_PORT:-443}"
     fi
+    socket_host="${DOMAIN:-localhost}"
+    socket_port_part=""
+    if [ "$socket_scheme" = "wss" ]; then
+      if [ -n "${socket_port:-}" ] && [ "$socket_port" != "443" ]; then
+        socket_port_part=":${socket_port}"
+      fi
+    else
+      if [ -n "${socket_port:-}" ] && [ "$socket_port" != "80" ]; then
+        socket_port_part=":${socket_port}"
+      fi
+    fi
+    vite_socket="${socket_scheme}://${socket_host}${socket_port_part}"
   fi
-  vite_socket="${socket_scheme}://${socket_host}${socket_port_part}"
   $DOCKER_BIN build -t "$FRONTEND_IMAGE" -f "$DIR/frontend/Dockerfile" \
     --build-arg VITE_API_BASE_URL="$vite_api" \
     --build-arg VITE_SOCKET_URL="$vite_socket" \

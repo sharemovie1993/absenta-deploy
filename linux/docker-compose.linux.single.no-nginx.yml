@@ -53,6 +53,17 @@ services:
     ports:
       - "${API_BIND_IP:-0.0.0.0}:3001:3001"
 
+  frontend:
+    image: absenta-frontend:latest
+    container_name: absenta-frontend
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+    depends_on:
+      - backend-api
+    ports:
+      - "${FRONTEND_BIND_IP:-0.0.0.0}:8080:8080"
+
   worker-infra:
     image: absenta-backend:latest
     container_name: absenta-worker-infra
