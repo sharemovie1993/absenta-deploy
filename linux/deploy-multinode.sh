@@ -28,11 +28,17 @@ BACKUP_STATE_FILE="${BACKUP_STATE_FILE:-/etc/absenta/backup.env}"
 TOKEN_GIT_ENV_FILE="${TOKEN_GIT_ENV_FILE:-/etc/absenta/tokengit.env}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/absenta}"
 BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
+BACKUP_OFFSITE_METHOD="${BACKUP_OFFSITE_METHOD:-none}"
 BACKUP_REMOTE_HOST="${BACKUP_REMOTE_HOST:-}"
 BACKUP_REMOTE_USER="${BACKUP_REMOTE_USER:-backup}"
 BACKUP_REMOTE_PORT="${BACKUP_REMOTE_PORT:-22}"
 BACKUP_REMOTE_DIR="${BACKUP_REMOTE_DIR:-/var/backups/absenta}"
 BACKUP_REMOTE_KEY="${BACKUP_REMOTE_KEY:-}"
+BACKUP_SMB_SHARE="${BACKUP_SMB_SHARE:-}"
+BACKUP_SMB_MOUNT="${BACKUP_SMB_MOUNT:-/mnt/absenta-backup}"
+BACKUP_SMB_SUBDIR="${BACKUP_SMB_SUBDIR:-absenta}"
+BACKUP_SMB_CREDENTIALS_FILE="${BACKUP_SMB_CREDENTIALS_FILE:-/etc/absenta/smb-backup.cred}"
+BACKUP_SMB_DOMAIN="${BACKUP_SMB_DOMAIN:-}"
 SSL_ENABLED="${SSL_ENABLED:-}"
 DOMAIN="${DOMAIN:-}"
 MAIN_DOMAIN="${MAIN_DOMAIN:-}"
@@ -134,7 +140,7 @@ select_main_menu() {
   echo "16) Pasang/Update cron backup harian (SINGLE)"
   echo "17) Lihat daftar backup (SINGLE)"
   echo "18) Sync backup SINGLE ke server backup (remote)"
-  echo "19) Setup konfigurasi backup (SINGLE) (local+remote)"
+  echo "19) Setup konfigurasi backup (SINGLE) (local+offsite)"
   echo "0) Keluar"
   read -rp "Pilih: " opt
   case "${opt:-}" in
@@ -218,12 +224,20 @@ ensure_backup_dir() {
   fi
 }
 
-remote_backup_enabled() {
-  [ -n "${BACKUP_REMOTE_HOST:-}" ]
+offsite_enabled() {
+  [ "${BACKUP_OFFSITE_METHOD:-none}" != "none" ]
 }
 
-sync_files_to_remote() {
-  if ! remote_backup_enabled; then
+ssh_offsite_enabled() {
+  [ "${BACKUP_OFFSITE_METHOD:-none}" = "ssh" ] && [ -n "${BACKUP_REMOTE_HOST:-}" ]
+}
+
+smb_offsite_enabled() {
+  [ "${BACKUP_OFFSITE_METHOD:-none}" = "smb" ] && [ -n "${BACKUP_SMB_SHARE:-}" ]
+}
+
+sync_files_to_ssh() {
+  if ! ssh_offsite_enabled; then
     return 0
   fi
   if ! is_cmd ssh || ! is_cmd scp; then
@@ -246,25 +260,109 @@ sync_files_to_remote() {
   fi
 
   ssh "${ssh_args[@]}" "$remote" "mkdir -p \"${BACKUP_REMOTE_DIR}\" && chmod 700 \"${BACKUP_REMOTE_DIR}\"" >/dev/null 2>&1 || {
-    echo "Gagal membuat folder backup remote."
+    echo "Gagal membuat folder backup remote (SSH)."
     exit 1
   }
 
   for f in "$@"; do
     if [ -f "$f" ]; then
       scp "${scp_args[@]}" "$f" "${remote}:${BACKUP_REMOTE_DIR}/" >/dev/null 2>&1 || {
-        echo "Gagal upload backup ke remote."
+        echo "Gagal upload backup ke remote (SSH)."
         exit 1
       }
     fi
   done
 }
 
+smb_mount_share() {
+  if ! smb_offsite_enabled; then
+    return 0
+  fi
+  if ! is_cmd sudo; then
+    echo "Butuh sudo untuk mount SMB."
+    exit 1
+  fi
+  if [ -f /etc/os-release ]; then
+    . /etc/os-release || true
+  fi
+  if [ "${ID:-}" = "ubuntu" ]; then
+    apt_ensure cifs-utils
+  fi
+
+  sudo mkdir -p "$BACKUP_SMB_MOUNT" >/dev/null 2>&1 || true
+  sudo chmod 700 "$BACKUP_SMB_MOUNT" >/dev/null 2>&1 || true
+
+  if is_cmd mountpoint; then
+    if mountpoint -q "$BACKUP_SMB_MOUNT"; then
+      return 0
+    fi
+  else
+    if grep -q " $BACKUP_SMB_MOUNT " /proc/mounts 2>/dev/null; then
+      return 0
+    fi
+  fi
+
+  if [ ! -f "$BACKUP_SMB_CREDENTIALS_FILE" ]; then
+    echo "Credentials SMB tidak ditemukan: $BACKUP_SMB_CREDENTIALS_FILE"
+    exit 1
+  fi
+
+  smb_opts="credentials=${BACKUP_SMB_CREDENTIALS_FILE},iocharset=utf8,vers=3.0,file_mode=0600,dir_mode=0700,noperm"
+  if [ -n "${BACKUP_SMB_DOMAIN:-}" ]; then
+    smb_opts="${smb_opts},domain=${BACKUP_SMB_DOMAIN}"
+  fi
+
+  sudo mount -t cifs "$BACKUP_SMB_SHARE" "$BACKUP_SMB_MOUNT" -o "$smb_opts" >/dev/null 2>&1 || {
+    echo "Gagal mount SMB share."
+    exit 1
+  }
+}
+
+sync_files_to_smb() {
+  if ! smb_offsite_enabled; then
+    return 0
+  fi
+  smb_mount_share
+
+  sudo mkdir -p "$BACKUP_SMB_MOUNT/$BACKUP_SMB_SUBDIR" >/dev/null 2>&1 || true
+  sudo chmod 700 "$BACKUP_SMB_MOUNT/$BACKUP_SMB_SUBDIR" >/dev/null 2>&1 || true
+
+  for f in "$@"; do
+    if [ -f "$f" ]; then
+      sudo cp -f "$f" "$BACKUP_SMB_MOUNT/$BACKUP_SMB_SUBDIR/" >/dev/null 2>&1 || {
+        echo "Gagal copy backup ke SMB."
+        exit 1
+      }
+      sudo chmod 600 "$BACKUP_SMB_MOUNT/$BACKUP_SMB_SUBDIR/$(basename "$f")" >/dev/null 2>&1 || true
+    fi
+  done
+}
+
+sync_files_offsite() {
+  if ! offsite_enabled; then
+    return 0
+  fi
+  case "${BACKUP_OFFSITE_METHOD:-none}" in
+    ssh) sync_files_to_ssh "$@" ;;
+    smb) sync_files_to_smb "$@" ;;
+    *) return 0 ;;
+  esac
+}
+
 sync_all_backups_to_remote() {
-  if ! remote_backup_enabled; then
+  if ! offsite_enabled; then
+    echo "Backup offsite belum diaktifkan."
+    exit 1
+  fi
+  if [ "${BACKUP_OFFSITE_METHOD:-none}" = "ssh" ] && [ -z "${BACKUP_REMOTE_HOST:-}" ]; then
     echo "BACKUP_REMOTE_HOST belum diset."
     exit 1
   fi
+  if [ "${BACKUP_OFFSITE_METHOD:-none}" = "smb" ] && [ -z "${BACKUP_SMB_SHARE:-}" ]; then
+    echo "BACKUP_SMB_SHARE belum diset."
+    exit 1
+  fi
+
   ensure_backup_dir
   files=()
   while IFS= read -r -d '' f; do
@@ -275,8 +373,8 @@ sync_all_backups_to_remote() {
     echo "Tidak ada file backup untuk disync."
     exit 0
   fi
-  sync_files_to_remote "${files[@]}"
-  echo "Sync backup ke remote selesai."
+  sync_files_offsite "${files[@]}"
+  echo "Sync backup offsite selesai."
 }
 
 setup_backup_remote() {
@@ -298,18 +396,57 @@ setup_backup_remote() {
   read -rp "BACKUP_RETENTION_DAYS [${BACKUP_RETENTION_DAYS}]: " v
   BACKUP_RETENTION_DAYS="${v:-$BACKUP_RETENTION_DAYS}"
 
-  read -rp "BACKUP_REMOTE_HOST (kosong=nonaktif) [${BACKUP_REMOTE_HOST}]: " v
-  BACKUP_REMOTE_HOST="${v:-$BACKUP_REMOTE_HOST}"
-  read -rp "BACKUP_REMOTE_USER [${BACKUP_REMOTE_USER}]: " v
-  BACKUP_REMOTE_USER="${v:-$BACKUP_REMOTE_USER}"
-  read -rp "BACKUP_REMOTE_PORT [${BACKUP_REMOTE_PORT}]: " v
-  BACKUP_REMOTE_PORT="${v:-$BACKUP_REMOTE_PORT}"
-  read -rp "BACKUP_REMOTE_DIR [${BACKUP_REMOTE_DIR}]: " v
-  BACKUP_REMOTE_DIR="${v:-$BACKUP_REMOTE_DIR}"
-  read -rp "BACKUP_REMOTE_KEY (path private key, kosong=default ssh) [${BACKUP_REMOTE_KEY}]: " v
-  BACKUP_REMOTE_KEY="${v:-$BACKUP_REMOTE_KEY}"
+  echo ""
+  echo "Pilih metode backup offsite:"
+  echo "  0) Nonaktif"
+  echo "  1) SSH/SCP (Linux server) (butuh SSH key untuk cron)"
+  echo "  2) SMB (Windows share/NAS) (pakai username+password)"
+  read -rp "Metode [0/1/2]: " m
+  case "${m:-}" in
+    1) BACKUP_OFFSITE_METHOD="ssh" ;;
+    2) BACKUP_OFFSITE_METHOD="smb" ;;
+    *) BACKUP_OFFSITE_METHOD="none" ;;
+  esac
 
-  export BACKUP_DIR BACKUP_RETENTION_DAYS BACKUP_REMOTE_HOST BACKUP_REMOTE_USER BACKUP_REMOTE_PORT BACKUP_REMOTE_DIR BACKUP_REMOTE_KEY
+  if [ "$BACKUP_OFFSITE_METHOD" = "ssh" ]; then
+    read -rp "SSH: IP/Host server backup (contoh: 10.10.10.10) [${BACKUP_REMOTE_HOST}]: " v
+    BACKUP_REMOTE_HOST="${v:-$BACKUP_REMOTE_HOST}"
+    read -rp "SSH: User login [${BACKUP_REMOTE_USER}]: " v
+    BACKUP_REMOTE_USER="${v:-$BACKUP_REMOTE_USER}"
+    read -rp "SSH: Port [${BACKUP_REMOTE_PORT}]: " v
+    BACKUP_REMOTE_PORT="${v:-$BACKUP_REMOTE_PORT}"
+    read -rp "SSH: Folder tujuan di server backup [${BACKUP_REMOTE_DIR}]: " v
+    BACKUP_REMOTE_DIR="${v:-$BACKUP_REMOTE_DIR}"
+    read -rp "SSH: Path private key (kosong=pakai default ~/.ssh) [${BACKUP_REMOTE_KEY}]: " v
+    BACKUP_REMOTE_KEY="${v:-$BACKUP_REMOTE_KEY}"
+  fi
+
+  if [ "$BACKUP_OFFSITE_METHOD" = "smb" ]; then
+    read -rp "SMB: Share (contoh: //10.10.10.10/backup) [${BACKUP_SMB_SHARE}]: " v
+    BACKUP_SMB_SHARE="${v:-$BACKUP_SMB_SHARE}"
+    read -rp "SMB: Folder tujuan di dalam share [${BACKUP_SMB_SUBDIR}]: " v
+    BACKUP_SMB_SUBDIR="${v:-$BACKUP_SMB_SUBDIR}"
+    read -rp "SMB: Domain (opsional, kosong jika tidak ada) [${BACKUP_SMB_DOMAIN}]: " v
+    BACKUP_SMB_DOMAIN="${v:-$BACKUP_SMB_DOMAIN}"
+    read -rp "SMB: Username [backup]: " v
+    smb_user="${v:-backup}"
+    read -rsp "SMB: Password (tidak akan tampil): " smb_pass
+    echo ""
+    read -rp "SMB: Simpan credentials ke file [${BACKUP_SMB_CREDENTIALS_FILE}]: " v
+    BACKUP_SMB_CREDENTIALS_FILE="${v:-$BACKUP_SMB_CREDENTIALS_FILE}"
+
+    sudo mkdir -p "$(dirname "$BACKUP_SMB_CREDENTIALS_FILE")" >/dev/null 2>&1 || true
+    tmp_cred="/tmp/absenta-smb-cred.$$"
+    umask 077
+    {
+      echo "username=${smb_user}"
+      echo "password=${smb_pass}"
+    } > "$tmp_cred"
+    sudo mv "$tmp_cred" "$BACKUP_SMB_CREDENTIALS_FILE" >/dev/null 2>&1 || true
+    sudo chmod 600 "$BACKUP_SMB_CREDENTIALS_FILE" >/dev/null 2>&1 || true
+  fi
+
+  export BACKUP_DIR BACKUP_RETENTION_DAYS BACKUP_OFFSITE_METHOD BACKUP_REMOTE_HOST BACKUP_REMOTE_USER BACKUP_REMOTE_PORT BACKUP_REMOTE_DIR BACKUP_REMOTE_KEY BACKUP_SMB_SHARE BACKUP_SMB_MOUNT BACKUP_SMB_SUBDIR BACKUP_SMB_CREDENTIALS_FILE BACKUP_SMB_DOMAIN
   save_backup_state
   echo "Setup backup remote tersimpan: $BACKUP_STATE_FILE"
 }
@@ -400,7 +537,7 @@ backup_single() {
   if [ -f "$BACKUP_DIR/$(basename "$tmp_ssl")" ]; then
     synced_files+=("$BACKUP_DIR/$(basename "$tmp_ssl")")
   fi
-  sync_files_to_remote "${synced_files[@]}"
+  sync_files_offsite "${synced_files[@]}"
 
   if [ -n "${BACKUP_RETENTION_DAYS:-}" ]; then
     if is_cmd sudo; then
@@ -650,6 +787,12 @@ load_backup_state() {
   BACKUP_REMOTE_DIR="$(printf '%s' "${BACKUP_REMOTE_DIR:-}" | tr -d '\r' | xargs)"
   BACKUP_REMOTE_KEY="$(printf '%s' "${BACKUP_REMOTE_KEY:-}" | tr -d '\r' | xargs)"
   BACKUP_RETENTION_DAYS="$(printf '%s' "${BACKUP_RETENTION_DAYS:-}" | tr -d '\r' | xargs)"
+  BACKUP_OFFSITE_METHOD="$(printf '%s' "${BACKUP_OFFSITE_METHOD:-}" | tr -d '\r' | xargs)"
+  BACKUP_SMB_SHARE="$(printf '%s' "${BACKUP_SMB_SHARE:-}" | tr -d '\r' | xargs)"
+  BACKUP_SMB_MOUNT="$(printf '%s' "${BACKUP_SMB_MOUNT:-}" | tr -d '\r' | xargs)"
+  BACKUP_SMB_SUBDIR="$(printf '%s' "${BACKUP_SMB_SUBDIR:-}" | tr -d '\r' | xargs)"
+  BACKUP_SMB_CREDENTIALS_FILE="$(printf '%s' "${BACKUP_SMB_CREDENTIALS_FILE:-}" | tr -d '\r' | xargs)"
+  BACKUP_SMB_DOMAIN="$(printf '%s' "${BACKUP_SMB_DOMAIN:-}" | tr -d '\r' | xargs)"
 }
 
 save_backup_state() {
@@ -662,11 +805,17 @@ save_backup_state() {
   {
     echo "BACKUP_DIR=${BACKUP_DIR:-}"
     echo "BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-}"
+    echo "BACKUP_OFFSITE_METHOD=${BACKUP_OFFSITE_METHOD:-none}"
     echo "BACKUP_REMOTE_HOST=${BACKUP_REMOTE_HOST:-}"
     echo "BACKUP_REMOTE_USER=${BACKUP_REMOTE_USER:-}"
     echo "BACKUP_REMOTE_PORT=${BACKUP_REMOTE_PORT:-}"
     echo "BACKUP_REMOTE_DIR=${BACKUP_REMOTE_DIR:-}"
     echo "BACKUP_REMOTE_KEY=${BACKUP_REMOTE_KEY:-}"
+    echo "BACKUP_SMB_SHARE=${BACKUP_SMB_SHARE:-}"
+    echo "BACKUP_SMB_MOUNT=${BACKUP_SMB_MOUNT:-}"
+    echo "BACKUP_SMB_SUBDIR=${BACKUP_SMB_SUBDIR:-}"
+    echo "BACKUP_SMB_CREDENTIALS_FILE=${BACKUP_SMB_CREDENTIALS_FILE:-}"
+    echo "BACKUP_SMB_DOMAIN=${BACKUP_SMB_DOMAIN:-}"
   } > "$tmp_state"
   sudo mv "$tmp_state" "$BACKUP_STATE_FILE" >/dev/null 2>&1 || true
   sudo chmod 600 "$BACKUP_STATE_FILE" >/dev/null 2>&1 || true
