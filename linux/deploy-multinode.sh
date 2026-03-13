@@ -24,6 +24,7 @@ STACK_DOWN_FIRST="${STACK_DOWN_FIRST:-true}"
 MIGRATE_IMAGE="${MIGRATE_IMAGE:-absenta-backend-migrate:latest}"
 SINGLE_STATE_FILE="${SINGLE_STATE_FILE:-/etc/absenta/single.env}"
 MULTI_STATE_FILE="${MULTI_STATE_FILE:-/etc/absenta/multi.env}"
+BACKUP_STATE_FILE="${BACKUP_STATE_FILE:-/etc/absenta/backup.env}"
 TOKEN_GIT_ENV_FILE="${TOKEN_GIT_ENV_FILE:-/etc/absenta/tokengit.env}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/absenta}"
 BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
@@ -133,6 +134,7 @@ select_main_menu() {
   echo "16) Pasang/Update cron backup harian (SINGLE)"
   echo "17) Lihat daftar backup (SINGLE)"
   echo "18) Sync backup SINGLE ke server backup (remote)"
+  echo "19) Setup konfigurasi backup (SINGLE) (local+remote)"
   echo "0) Keluar"
   read -rp "Pilih: " opt
   case "${opt:-}" in
@@ -154,6 +156,7 @@ select_main_menu() {
     16) ACTION="install_backup_cron"; MODE="single" ;;
     17) ACTION="list_backups"; MODE="single" ;;
     18) ACTION="sync_backups_remote"; MODE="single" ;;
+    19) ACTION="setup_backup_remote"; MODE="single" ;;
     0) exit 0 ;;
     *) ACTION="deploy"; MODE="multi" ;;
   esac
@@ -276,6 +279,41 @@ sync_all_backups_to_remote() {
   echo "Sync backup ke remote selesai."
 }
 
+setup_backup_remote() {
+  if [ "$MODE" != "single" ]; then
+    echo "Setup backup remote ini hanya untuk MODE=single"
+    exit 1
+  fi
+  if ! is_cmd sudo; then
+    echo "Butuh sudo untuk menyimpan konfigurasi backup."
+    exit 1
+  fi
+  if ! ( [ -t 0 ] && [ -t 1 ] ); then
+    echo "Setup backup remote butuh mode interaktif."
+    exit 1
+  fi
+
+  read -rp "BACKUP_DIR [${BACKUP_DIR}]: " v
+  BACKUP_DIR="${v:-$BACKUP_DIR}"
+  read -rp "BACKUP_RETENTION_DAYS [${BACKUP_RETENTION_DAYS}]: " v
+  BACKUP_RETENTION_DAYS="${v:-$BACKUP_RETENTION_DAYS}"
+
+  read -rp "BACKUP_REMOTE_HOST (kosong=nonaktif) [${BACKUP_REMOTE_HOST}]: " v
+  BACKUP_REMOTE_HOST="${v:-$BACKUP_REMOTE_HOST}"
+  read -rp "BACKUP_REMOTE_USER [${BACKUP_REMOTE_USER}]: " v
+  BACKUP_REMOTE_USER="${v:-$BACKUP_REMOTE_USER}"
+  read -rp "BACKUP_REMOTE_PORT [${BACKUP_REMOTE_PORT}]: " v
+  BACKUP_REMOTE_PORT="${v:-$BACKUP_REMOTE_PORT}"
+  read -rp "BACKUP_REMOTE_DIR [${BACKUP_REMOTE_DIR}]: " v
+  BACKUP_REMOTE_DIR="${v:-$BACKUP_REMOTE_DIR}"
+  read -rp "BACKUP_REMOTE_KEY (path private key, kosong=default ssh) [${BACKUP_REMOTE_KEY}]: " v
+  BACKUP_REMOTE_KEY="${v:-$BACKUP_REMOTE_KEY}"
+
+  export BACKUP_DIR BACKUP_RETENTION_DAYS BACKUP_REMOTE_HOST BACKUP_REMOTE_USER BACKUP_REMOTE_PORT BACKUP_REMOTE_DIR BACKUP_REMOTE_KEY
+  save_backup_state
+  echo "Setup backup remote tersimpan: $BACKUP_STATE_FILE"
+}
+
 backup_single() {
   if [ "$MODE" != "single" ]; then
     echo "Backup ini hanya untuk MODE=single"
@@ -314,6 +352,7 @@ backup_single() {
     sudo tar -czf "$tmp_cfg" \
       /etc/absenta/single.env \
       /etc/absenta/multi.env \
+      /etc/absenta/backup.env \
       /etc/absenta/tokengit.env \
       /etc/cron.d/absenta-certbot \
       /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
@@ -321,6 +360,7 @@ backup_single() {
     tar -czf "$tmp_cfg" \
       /etc/absenta/single.env \
       /etc/absenta/multi.env \
+      /etc/absenta/backup.env \
       /etc/absenta/tokengit.env \
       /etc/cron.d/absenta-certbot \
       /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
@@ -468,9 +508,9 @@ run_non_deploy_action() {
       ;;
     reset_config)
       if is_cmd sudo; then
-        sudo rm -f /etc/absenta/single.env /etc/absenta/multi.env || true
+        sudo rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/backup.env || true
       else
-        rm -f /etc/absenta/single.env /etc/absenta/multi.env || true
+        rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/backup.env || true
       fi
       echo "Config reset OK"
       exit 0
@@ -508,9 +548,9 @@ run_non_deploy_action() {
       $DOCKER_BIN network rm absenta-net >/dev/null 2>&1 || true
 
       if is_cmd sudo; then
-        sudo rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/github.token /etc/absenta/tokengit.env /etc/cron.d/absenta-certbot /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
+        sudo rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/backup.env /etc/absenta/github.token /etc/absenta/tokengit.env /etc/cron.d/absenta-certbot /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
       else
-        rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/github.token /etc/absenta/tokengit.env /etc/cron.d/absenta-certbot /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
+        rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/backup.env /etc/absenta/github.token /etc/absenta/tokengit.env /etc/cron.d/absenta-certbot /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
       fi
       rm -f "$DIR/../env/.env.tokengit" >/dev/null 2>&1 || true
 
@@ -538,6 +578,10 @@ run_non_deploy_action() {
       ;;
     sync_backups_remote)
       sync_all_backups_to_remote
+      exit 0
+      ;;
+    setup_backup_remote)
+      setup_backup_remote
       exit 0
       ;;
   esac
@@ -591,6 +635,41 @@ load_multi_state() {
   MAIN_DOMAIN="${MAIN_DOMAIN//\"/}"
   MAIN_DOMAIN="${MAIN_DOMAIN//\'/}"
   MAIN_DOMAIN="$(printf '%s' "$MAIN_DOMAIN" | tr -d '\r' | xargs)"
+}
+
+load_backup_state() {
+  if [ -f "$BACKUP_STATE_FILE" ]; then
+    set -a
+    . "$BACKUP_STATE_FILE" || true
+    set +a
+  fi
+  BACKUP_DIR="$(printf '%s' "${BACKUP_DIR:-}" | tr -d '\r' | xargs)"
+  BACKUP_REMOTE_HOST="$(printf '%s' "${BACKUP_REMOTE_HOST:-}" | tr -d '\r' | xargs)"
+  BACKUP_REMOTE_USER="$(printf '%s' "${BACKUP_REMOTE_USER:-}" | tr -d '\r' | xargs)"
+  BACKUP_REMOTE_PORT="$(printf '%s' "${BACKUP_REMOTE_PORT:-}" | tr -d '\r' | xargs)"
+  BACKUP_REMOTE_DIR="$(printf '%s' "${BACKUP_REMOTE_DIR:-}" | tr -d '\r' | xargs)"
+  BACKUP_REMOTE_KEY="$(printf '%s' "${BACKUP_REMOTE_KEY:-}" | tr -d '\r' | xargs)"
+  BACKUP_RETENTION_DAYS="$(printf '%s' "${BACKUP_RETENTION_DAYS:-}" | tr -d '\r' | xargs)"
+}
+
+save_backup_state() {
+  if ! is_cmd sudo; then
+    return 0
+  fi
+  sudo mkdir -p "$(dirname "$BACKUP_STATE_FILE")" >/dev/null 2>&1 || true
+  tmp_state="/tmp/absenta-backup.env.$$"
+  umask 077
+  {
+    echo "BACKUP_DIR=${BACKUP_DIR:-}"
+    echo "BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-}"
+    echo "BACKUP_REMOTE_HOST=${BACKUP_REMOTE_HOST:-}"
+    echo "BACKUP_REMOTE_USER=${BACKUP_REMOTE_USER:-}"
+    echo "BACKUP_REMOTE_PORT=${BACKUP_REMOTE_PORT:-}"
+    echo "BACKUP_REMOTE_DIR=${BACKUP_REMOTE_DIR:-}"
+    echo "BACKUP_REMOTE_KEY=${BACKUP_REMOTE_KEY:-}"
+  } > "$tmp_state"
+  sudo mv "$tmp_state" "$BACKUP_STATE_FILE" >/dev/null 2>&1 || true
+  sudo chmod 600 "$BACKUP_STATE_FILE" >/dev/null 2>&1 || true
 }
 
 save_single_state() {
@@ -654,6 +733,7 @@ save_multi_state() {
 
 load_single_state
 load_multi_state
+load_backup_state
 
 if [ -t 0 ] && [ -t 1 ]; then
   prompt_ports
