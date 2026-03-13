@@ -27,6 +27,11 @@ MULTI_STATE_FILE="${MULTI_STATE_FILE:-/etc/absenta/multi.env}"
 TOKEN_GIT_ENV_FILE="${TOKEN_GIT_ENV_FILE:-/etc/absenta/tokengit.env}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/absenta}"
 BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
+BACKUP_REMOTE_HOST="${BACKUP_REMOTE_HOST:-}"
+BACKUP_REMOTE_USER="${BACKUP_REMOTE_USER:-backup}"
+BACKUP_REMOTE_PORT="${BACKUP_REMOTE_PORT:-22}"
+BACKUP_REMOTE_DIR="${BACKUP_REMOTE_DIR:-/var/backups/absenta}"
+BACKUP_REMOTE_KEY="${BACKUP_REMOTE_KEY:-}"
 SSL_ENABLED="${SSL_ENABLED:-}"
 DOMAIN="${DOMAIN:-}"
 MAIN_DOMAIN="${MAIN_DOMAIN:-}"
@@ -69,6 +74,7 @@ ensure_prereqs() {
     apt_ensure git
     apt_ensure iproute2
     apt_ensure openssl
+    apt_ensure openssh-client
   fi
 }
 
@@ -126,6 +132,7 @@ select_main_menu() {
   echo "15) Backup SINGLE sekarang (DB+config+SSL)"
   echo "16) Pasang/Update cron backup harian (SINGLE)"
   echo "17) Lihat daftar backup (SINGLE)"
+  echo "18) Sync backup SINGLE ke server backup (remote)"
   echo "0) Keluar"
   read -rp "Pilih: " opt
   case "${opt:-}" in
@@ -146,6 +153,7 @@ select_main_menu() {
     15) ACTION="backup_single"; MODE="single" ;;
     16) ACTION="install_backup_cron"; MODE="single" ;;
     17) ACTION="list_backups"; MODE="single" ;;
+    18) ACTION="sync_backups_remote"; MODE="single" ;;
     0) exit 0 ;;
     *) ACTION="deploy"; MODE="multi" ;;
   esac
@@ -205,6 +213,67 @@ ensure_backup_dir() {
     mkdir -p "$BACKUP_DIR" >/dev/null 2>&1 || true
     chmod 700 "$BACKUP_DIR" >/dev/null 2>&1 || true
   fi
+}
+
+remote_backup_enabled() {
+  [ -n "${BACKUP_REMOTE_HOST:-}" ]
+}
+
+sync_files_to_remote() {
+  if ! remote_backup_enabled; then
+    return 0
+  fi
+  if ! is_cmd ssh || ! is_cmd scp; then
+    echo "ssh/scp belum tersedia."
+    exit 1
+  fi
+
+  local remote="${BACKUP_REMOTE_USER}@${BACKUP_REMOTE_HOST}"
+  ssh_args=(
+    -p "${BACKUP_REMOTE_PORT}"
+    -o StrictHostKeyChecking=accept-new
+  )
+  scp_args=(
+    -P "${BACKUP_REMOTE_PORT}"
+    -o StrictHostKeyChecking=accept-new
+  )
+  if [ -n "${BACKUP_REMOTE_KEY:-}" ]; then
+    ssh_args+=(-i "$BACKUP_REMOTE_KEY")
+    scp_args+=(-i "$BACKUP_REMOTE_KEY")
+  fi
+
+  ssh "${ssh_args[@]}" "$remote" "mkdir -p \"${BACKUP_REMOTE_DIR}\" && chmod 700 \"${BACKUP_REMOTE_DIR}\"" >/dev/null 2>&1 || {
+    echo "Gagal membuat folder backup remote."
+    exit 1
+  }
+
+  for f in "$@"; do
+    if [ -f "$f" ]; then
+      scp "${scp_args[@]}" "$f" "${remote}:${BACKUP_REMOTE_DIR}/" >/dev/null 2>&1 || {
+        echo "Gagal upload backup ke remote."
+        exit 1
+      }
+    fi
+  done
+}
+
+sync_all_backups_to_remote() {
+  if ! remote_backup_enabled; then
+    echo "BACKUP_REMOTE_HOST belum diset."
+    exit 1
+  fi
+  ensure_backup_dir
+  files=()
+  while IFS= read -r -d '' f; do
+    files+=("$f")
+  done < <(find "$BACKUP_DIR" -maxdepth 1 -type f -name "absenta-*" -print0 2>/dev/null || true)
+
+  if [ "${#files[@]}" -eq 0 ]; then
+    echo "Tidak ada file backup untuk disync."
+    exit 0
+  fi
+  sync_files_to_remote "${files[@]}"
+  echo "Sync backup ke remote selesai."
 }
 
 backup_single() {
@@ -284,6 +353,15 @@ backup_single() {
     fi
   fi
 
+  synced_files=(
+    "$BACKUP_DIR/$(basename "$tmp_db")"
+    "$BACKUP_DIR/$(basename "$tmp_cfg")"
+  )
+  if [ -f "$BACKUP_DIR/$(basename "$tmp_ssl")" ]; then
+    synced_files+=("$BACKUP_DIR/$(basename "$tmp_ssl")")
+  fi
+  sync_files_to_remote "${synced_files[@]}"
+
   if [ -n "${BACKUP_RETENTION_DAYS:-}" ]; then
     if is_cmd sudo; then
       sudo find "$BACKUP_DIR" -type f -name "absenta-*" -mtime +"$BACKUP_RETENTION_DAYS" -delete >/dev/null 2>&1 || true
@@ -314,7 +392,7 @@ install_backup_cron() {
   cat <<EOF | sudo tee /etc/cron.d/absenta-backup >/dev/null
 SHELL=/bin/bash
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
-30 2 * * * root MODE=single ACTION=backup_single BACKUP_DIR=${BACKUP_DIR} BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS} /usr/bin/env bash ${script_path} >/var/log/absenta-backup.log 2>&1
+30 2 * * * root MODE=single ACTION=backup_single BACKUP_DIR=${BACKUP_DIR} BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS} BACKUP_REMOTE_HOST=${BACKUP_REMOTE_HOST} BACKUP_REMOTE_USER=${BACKUP_REMOTE_USER} BACKUP_REMOTE_PORT=${BACKUP_REMOTE_PORT} BACKUP_REMOTE_DIR=${BACKUP_REMOTE_DIR} BACKUP_REMOTE_KEY=${BACKUP_REMOTE_KEY} /usr/bin/env bash ${script_path} >/var/log/absenta-backup.log 2>&1
 EOF
   sudo chmod 644 /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
   sudo systemctl enable --now cron >/dev/null 2>&1 || true
@@ -456,6 +534,10 @@ run_non_deploy_action() {
       ;;
     list_backups)
       list_backups
+      exit 0
+      ;;
+    sync_backups_remote)
+      sync_all_backups_to_remote
       exit 0
       ;;
   esac
