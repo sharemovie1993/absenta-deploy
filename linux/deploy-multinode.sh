@@ -422,7 +422,7 @@ setup_backup_remote() {
   fi
 
   if [ "$BACKUP_OFFSITE_METHOD" = "smb" ]; then
-    read -rp "SMB: Share (contoh: //10.10.10.10/backup) [${BACKUP_SMB_SHARE}]: " v
+    read -rp "SMB: Share (contoh: //10.10.10.10/backup) (tanpa subfolder) [${BACKUP_SMB_SHARE}]: " v
     BACKUP_SMB_SHARE="${v:-$BACKUP_SMB_SHARE}"
     read -rp "SMB: Folder tujuan di dalam share [${BACKUP_SMB_SUBDIR}]: " v
     BACKUP_SMB_SUBDIR="${v:-$BACKUP_SMB_SUBDIR}"
@@ -491,6 +491,7 @@ backup_single() {
       /etc/absenta/multi.env \
       /etc/absenta/backup.env \
       /etc/absenta/tokengit.env \
+      /etc/absenta/smb-backup.cred \
       /etc/cron.d/absenta-certbot \
       /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
   else
@@ -499,6 +500,7 @@ backup_single() {
       /etc/absenta/multi.env \
       /etc/absenta/backup.env \
       /etc/absenta/tokengit.env \
+      /etc/absenta/smb-backup.cred \
       /etc/cron.d/absenta-certbot \
       /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
   fi
@@ -569,7 +571,7 @@ install_backup_cron() {
   cat <<EOF | sudo tee /etc/cron.d/absenta-backup >/dev/null
 SHELL=/bin/bash
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
-30 2 * * * root MODE=single ACTION=backup_single BACKUP_DIR=${BACKUP_DIR} BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS} BACKUP_REMOTE_HOST=${BACKUP_REMOTE_HOST} BACKUP_REMOTE_USER=${BACKUP_REMOTE_USER} BACKUP_REMOTE_PORT=${BACKUP_REMOTE_PORT} BACKUP_REMOTE_DIR=${BACKUP_REMOTE_DIR} BACKUP_REMOTE_KEY=${BACKUP_REMOTE_KEY} /usr/bin/env bash ${script_path} >/var/log/absenta-backup.log 2>&1
+30 2 * * * root MODE=single ACTION=backup_single BACKUP_DIR=${BACKUP_DIR} BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS} BACKUP_OFFSITE_METHOD=${BACKUP_OFFSITE_METHOD} BACKUP_REMOTE_HOST=${BACKUP_REMOTE_HOST} BACKUP_REMOTE_USER=${BACKUP_REMOTE_USER} BACKUP_REMOTE_PORT=${BACKUP_REMOTE_PORT} BACKUP_REMOTE_DIR=${BACKUP_REMOTE_DIR} BACKUP_REMOTE_KEY=${BACKUP_REMOTE_KEY} BACKUP_SMB_SHARE=${BACKUP_SMB_SHARE} BACKUP_SMB_MOUNT=${BACKUP_SMB_MOUNT} BACKUP_SMB_SUBDIR=${BACKUP_SMB_SUBDIR} BACKUP_SMB_CREDENTIALS_FILE=${BACKUP_SMB_CREDENTIALS_FILE} BACKUP_SMB_DOMAIN=${BACKUP_SMB_DOMAIN} /usr/bin/env bash ${script_path} >/var/log/absenta-backup.log 2>&1
 EOF
   sudo chmod 644 /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
   sudo systemctl enable --now cron >/dev/null 2>&1 || true
@@ -685,9 +687,9 @@ run_non_deploy_action() {
       $DOCKER_BIN network rm absenta-net >/dev/null 2>&1 || true
 
       if is_cmd sudo; then
-        sudo rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/backup.env /etc/absenta/github.token /etc/absenta/tokengit.env /etc/cron.d/absenta-certbot /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
+        sudo rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/backup.env /etc/absenta/github.token /etc/absenta/tokengit.env /etc/absenta/smb-backup.cred /etc/cron.d/absenta-certbot /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
       else
-        rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/backup.env /etc/absenta/github.token /etc/absenta/tokengit.env /etc/cron.d/absenta-certbot /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
+        rm -f /etc/absenta/single.env /etc/absenta/multi.env /etc/absenta/backup.env /etc/absenta/github.token /etc/absenta/tokengit.env /etc/absenta/smb-backup.cred /etc/cron.d/absenta-certbot /etc/cron.d/absenta-backup >/dev/null 2>&1 || true
       fi
       rm -f "$DIR/../env/.env.tokengit" >/dev/null 2>&1 || true
 
@@ -722,56 +724,6 @@ run_non_deploy_action() {
       exit 0
       ;;
   esac
-}
-
-if [ "$ACTION" != "deploy" ]; then
-  run_non_deploy_action
-fi
-
-load_single_state() {
-  if [ "$MODE" != "single" ]; then
-    return 0
-  fi
-  if [ -f "$SINGLE_STATE_FILE" ]; then
-    set -a
-    . "$SINGLE_STATE_FILE" || true
-    set +a
-  fi
-  PUBLIC_APP_URL="${PUBLIC_APP_URL//\`/}"
-  PUBLIC_APP_URL="${PUBLIC_APP_URL//\"/}"
-  PUBLIC_APP_URL="${PUBLIC_APP_URL//\'/}"
-  PUBLIC_APP_URL="$(printf '%s' "$PUBLIC_APP_URL" | tr -d '\r' | xargs)"
-  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\`/}"
-  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\"/}"
-  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\'/}"
-  PUBLIC_INVOICE_BASE_URL="$(printf '%s' "$PUBLIC_INVOICE_BASE_URL" | tr -d '\r' | xargs)"
-  MAIN_DOMAIN="${MAIN_DOMAIN//\`/}"
-  MAIN_DOMAIN="${MAIN_DOMAIN//\"/}"
-  MAIN_DOMAIN="${MAIN_DOMAIN//\'/}"
-  MAIN_DOMAIN="$(printf '%s' "$MAIN_DOMAIN" | tr -d '\r' | xargs)"
-}
-
-load_multi_state() {
-  if [ "$MODE" != "multi" ]; then
-    return 0
-  fi
-  if [ -f "$MULTI_STATE_FILE" ]; then
-    set -a
-    . "$MULTI_STATE_FILE" || true
-    set +a
-  fi
-  PUBLIC_APP_URL="${PUBLIC_APP_URL//\`/}"
-  PUBLIC_APP_URL="${PUBLIC_APP_URL//\"/}"
-  PUBLIC_APP_URL="${PUBLIC_APP_URL//\'/}"
-  PUBLIC_APP_URL="$(printf '%s' "$PUBLIC_APP_URL" | tr -d '\r' | xargs)"
-  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\`/}"
-  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\"/}"
-  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\'/}"
-  PUBLIC_INVOICE_BASE_URL="$(printf '%s' "$PUBLIC_INVOICE_BASE_URL" | tr -d '\r' | xargs)"
-  MAIN_DOMAIN="${MAIN_DOMAIN//\`/}"
-  MAIN_DOMAIN="${MAIN_DOMAIN//\"/}"
-  MAIN_DOMAIN="${MAIN_DOMAIN//\'/}"
-  MAIN_DOMAIN="$(printf '%s' "$MAIN_DOMAIN" | tr -d '\r' | xargs)"
 }
 
 load_backup_state() {
@@ -819,6 +771,57 @@ save_backup_state() {
   } > "$tmp_state"
   sudo mv "$tmp_state" "$BACKUP_STATE_FILE" >/dev/null 2>&1 || true
   sudo chmod 600 "$BACKUP_STATE_FILE" >/dev/null 2>&1 || true
+}
+
+if [ "$ACTION" != "deploy" ]; then
+  load_backup_state
+  run_non_deploy_action
+fi
+
+load_single_state() {
+  if [ "$MODE" != "single" ]; then
+    return 0
+  fi
+  if [ -f "$SINGLE_STATE_FILE" ]; then
+    set -a
+    . "$SINGLE_STATE_FILE" || true
+    set +a
+  fi
+  PUBLIC_APP_URL="${PUBLIC_APP_URL//\`/}"
+  PUBLIC_APP_URL="${PUBLIC_APP_URL//\"/}"
+  PUBLIC_APP_URL="${PUBLIC_APP_URL//\'/}"
+  PUBLIC_APP_URL="$(printf '%s' "$PUBLIC_APP_URL" | tr -d '\r' | xargs)"
+  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\`/}"
+  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\"/}"
+  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\'/}"
+  PUBLIC_INVOICE_BASE_URL="$(printf '%s' "$PUBLIC_INVOICE_BASE_URL" | tr -d '\r' | xargs)"
+  MAIN_DOMAIN="${MAIN_DOMAIN//\`/}"
+  MAIN_DOMAIN="${MAIN_DOMAIN//\"/}"
+  MAIN_DOMAIN="${MAIN_DOMAIN//\'/}"
+  MAIN_DOMAIN="$(printf '%s' "$MAIN_DOMAIN" | tr -d '\r' | xargs)"
+}
+
+load_multi_state() {
+  if [ "$MODE" != "multi" ]; then
+    return 0
+  fi
+  if [ -f "$MULTI_STATE_FILE" ]; then
+    set -a
+    . "$MULTI_STATE_FILE" || true
+    set +a
+  fi
+  PUBLIC_APP_URL="${PUBLIC_APP_URL//\`/}"
+  PUBLIC_APP_URL="${PUBLIC_APP_URL//\"/}"
+  PUBLIC_APP_URL="${PUBLIC_APP_URL//\'/}"
+  PUBLIC_APP_URL="$(printf '%s' "$PUBLIC_APP_URL" | tr -d '\r' | xargs)"
+  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\`/}"
+  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\"/}"
+  PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL//\'/}"
+  PUBLIC_INVOICE_BASE_URL="$(printf '%s' "$PUBLIC_INVOICE_BASE_URL" | tr -d '\r' | xargs)"
+  MAIN_DOMAIN="${MAIN_DOMAIN//\`/}"
+  MAIN_DOMAIN="${MAIN_DOMAIN//\"/}"
+  MAIN_DOMAIN="${MAIN_DOMAIN//\'/}"
+  MAIN_DOMAIN="$(printf '%s' "$MAIN_DOMAIN" | tr -d '\r' | xargs)"
 }
 
 save_single_state() {
