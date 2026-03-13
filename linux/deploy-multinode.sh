@@ -142,6 +142,7 @@ select_main_menu() {
   echo "17) Lihat daftar backup (SINGLE)"
   echo "18) Sync backup SINGLE ke server backup (remote)"
   echo "19) Setup konfigurasi backup (SINGLE) (local+offsite)"
+  echo "20) Restore SINGLE (1 klik) dari backup terbaru"
   echo "0) Keluar"
   read -rp "Pilih: " opt
   case "${opt:-}" in
@@ -164,6 +165,7 @@ select_main_menu() {
     17) ACTION="list_backups"; MODE="single" ;;
     18) ACTION="sync_backups_remote"; MODE="single" ;;
     19) ACTION="setup_backup_remote"; MODE="single" ;;
+    20) ACTION="restore_single"; MODE="single" ;;
     0) exit 0 ;;
     *) ACTION="deploy"; MODE="multi" ;;
   esac
@@ -265,6 +267,20 @@ build_smbclient_cd_mkdir_cmds() {
   done
 }
 
+build_smbclient_cd_cmds() {
+  local subdir="$1"
+  if [ -z "${subdir:-}" ]; then
+    return 0
+  fi
+  IFS='/' read -r -a parts <<< "$subdir"
+  for p in "${parts[@]}"; do
+    if [ -z "${p:-}" ]; then
+      continue
+    fi
+    printf 'cd "%s";' "$p"
+  done
+}
+
 sync_files_to_smbclient() {
   if ! smb_offsite_enabled; then
     return 0
@@ -332,6 +348,231 @@ sync_files_to_ssh() {
       }
     fi
   done
+}
+
+download_latest_from_smb() {
+  ensure_smbclient
+  if [ ! -f "$BACKUP_SMB_CREDENTIALS_FILE" ]; then
+    echo "Credentials SMB tidak ditemukan: $BACKUP_SMB_CREDENTIALS_FILE"
+    exit 1
+  fi
+  local out_dir="$1"
+  mkdir -p "$out_dir" >/dev/null 2>&1 || true
+
+  local cd_cmds
+  cd_cmds="$(build_smbclient_cd_cmds "${BACKUP_SMB_SUBDIR:-}")"
+
+  list_cmd="${cd_cmds}ls;"
+  if [ -n "${BACKUP_SMB_DOMAIN:-}" ]; then
+    list_out="$(smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$list_cmd" 2>/dev/null || true)"
+  else
+    list_out="$(smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$list_cmd" 2>/dev/null || true)"
+  fi
+
+  latest_db="$(printf '%s\n' "$list_out" | awk '{print $1}' | grep -E '^absenta-db-.*\.sql\.gz$' | sort | tail -n 1 || true)"
+  latest_cfg="$(printf '%s\n' "$list_out" | awk '{print $1}' | grep -E '^absenta-config-.*\.tar\.gz$' | sort | tail -n 1 || true)"
+  latest_ssl="$(printf '%s\n' "$list_out" | awk '{print $1}' | grep -E '^absenta-letsencrypt-.*\.tar\.gz$' | sort | tail -n 1 || true)"
+
+  if [ -z "${latest_db:-}" ] || [ -z "${latest_cfg:-}" ]; then
+    echo "File backup tidak ditemukan di SMB. Pastikan share + subfolder benar."
+    exit 1
+  fi
+
+  get_db_cmd="${cd_cmds}get \"${latest_db}\" \"${out_dir}/${latest_db}\";"
+  get_cfg_cmd="${cd_cmds}get \"${latest_cfg}\" \"${out_dir}/${latest_cfg}\";"
+  if [ -n "${BACKUP_SMB_DOMAIN:-}" ]; then
+    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$get_db_cmd" >/dev/null 2>&1 || {
+      echo "Gagal download DB dari SMB."
+      exit 1
+    }
+    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$get_cfg_cmd" >/dev/null 2>&1 || {
+      echo "Gagal download config dari SMB."
+      exit 1
+    }
+  else
+    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$get_db_cmd" >/dev/null 2>&1 || {
+      echo "Gagal download DB dari SMB."
+      exit 1
+    }
+    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$get_cfg_cmd" >/dev/null 2>&1 || {
+      echo "Gagal download config dari SMB."
+      exit 1
+    }
+  fi
+
+  if [ -n "${latest_ssl:-}" ]; then
+    get_ssl_cmd="${cd_cmds}get \"${latest_ssl}\" \"${out_dir}/${latest_ssl}\";"
+    if [ -n "${BACKUP_SMB_DOMAIN:-}" ]; then
+      smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$get_ssl_cmd" >/dev/null 2>&1 || true
+    else
+      smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$get_ssl_cmd" >/dev/null 2>&1 || true
+    fi
+  fi
+
+  printf '%s\n' "${out_dir}/${latest_db}" "${out_dir}/${latest_cfg}" "${out_dir}/${latest_ssl}"
+}
+
+download_latest_from_ssh() {
+  if [ -z "${BACKUP_REMOTE_HOST:-}" ]; then
+    echo "BACKUP_REMOTE_HOST belum diset."
+    exit 1
+  fi
+  if ! is_cmd ssh || ! is_cmd scp; then
+    echo "ssh/scp belum tersedia."
+    exit 1
+  fi
+  local out_dir="$1"
+  mkdir -p "$out_dir" >/dev/null 2>&1 || true
+
+  local remote="${BACKUP_REMOTE_USER}@${BACKUP_REMOTE_HOST}"
+  ssh_args=(-p "${BACKUP_REMOTE_PORT}" -o StrictHostKeyChecking=accept-new)
+  scp_args=(-P "${BACKUP_REMOTE_PORT}" -o StrictHostKeyChecking=accept-new)
+  if [ -n "${BACKUP_REMOTE_KEY:-}" ]; then
+    ssh_args+=(-i "$BACKUP_REMOTE_KEY")
+    scp_args+=(-i "$BACKUP_REMOTE_KEY")
+  fi
+
+  files="$(ssh "${ssh_args[@]}" "$remote" "ls -1 ${BACKUP_REMOTE_DIR} 2>/dev/null || true" 2>/dev/null || true)"
+  latest_db="$(printf '%s\n' "$files" | grep -E '^absenta-db-.*\.sql\.gz$' | sort | tail -n 1 || true)"
+  latest_cfg="$(printf '%s\n' "$files" | grep -E '^absenta-config-.*\.tar\.gz$' | sort | tail -n 1 || true)"
+  latest_ssl="$(printf '%s\n' "$files" | grep -E '^absenta-letsencrypt-.*\.tar\.gz$' | sort | tail -n 1 || true)"
+  if [ -z "${latest_db:-}" ] || [ -z "${latest_cfg:-}" ]; then
+    echo "File backup tidak ditemukan di SSH remote."
+    exit 1
+  fi
+
+  scp "${scp_args[@]}" "${remote}:${BACKUP_REMOTE_DIR}/${latest_db}" "${out_dir}/${latest_db}" >/dev/null 2>&1 || {
+    echo "Gagal download DB dari SSH remote."
+    exit 1
+  }
+  scp "${scp_args[@]}" "${remote}:${BACKUP_REMOTE_DIR}/${latest_cfg}" "${out_dir}/${latest_cfg}" >/dev/null 2>&1 || {
+    echo "Gagal download config dari SSH remote."
+    exit 1
+  }
+  if [ -n "${latest_ssl:-}" ]; then
+    scp "${scp_args[@]}" "${remote}:${BACKUP_REMOTE_DIR}/${latest_ssl}" "${out_dir}/${latest_ssl}" >/dev/null 2>&1 || true
+  fi
+  printf '%s\n' "${out_dir}/${latest_db}" "${out_dir}/${latest_cfg}" "${out_dir}/${latest_ssl}"
+}
+
+pick_latest_local_backups() {
+  ensure_backup_dir
+  latest_db="$(ls -1 "$BACKUP_DIR"/absenta-db-*.sql.gz 2>/dev/null | sort | tail -n 1 || true)"
+  latest_cfg="$(ls -1 "$BACKUP_DIR"/absenta-config-*.tar.gz 2>/dev/null | sort | tail -n 1 || true)"
+  latest_ssl="$(ls -1 "$BACKUP_DIR"/absenta-letsencrypt-*.tar.gz 2>/dev/null | sort | tail -n 1 || true)"
+  if [ -z "${latest_db:-}" ] || [ -z "${latest_cfg:-}" ]; then
+    echo "Backup lokal tidak ditemukan di $BACKUP_DIR"
+    exit 1
+  fi
+  printf '%s\n' "$latest_db" "$latest_cfg" "$latest_ssl"
+}
+
+restore_single_oneclick() {
+  if [ "$MODE" != "single" ]; then
+    echo "Restore ini hanya untuk MODE=single"
+    exit 1
+  fi
+  if ! is_cmd sudo; then
+    echo "Butuh sudo untuk restore."
+    exit 1
+  fi
+  if ! ( [ -t 0 ] && [ -t 1 ] ); then
+    echo "Restore butuh mode interaktif."
+    exit 1
+  fi
+
+  echo "Restore SINGLE akan mengganti config + database di mesin ini."
+  read -rp "Lanjutkan restore? [y/N]: " ans
+  case "$(printf '%s' "${ans:-}" | tr '[:upper:]' '[:lower:]')" in
+    y|yes) ;;
+    *) echo "Batal"; exit 0 ;;
+  esac
+
+  restore_dir="/tmp/absenta-restore"
+  sudo rm -rf "$restore_dir" >/dev/null 2>&1 || true
+  sudo mkdir -p "$restore_dir" >/dev/null 2>&1 || true
+  sudo chmod 700 "$restore_dir" >/dev/null 2>&1 || true
+
+  db_path=""
+  cfg_path=""
+  ssl_path=""
+
+  if offsite_enabled; then
+    case "${BACKUP_OFFSITE_METHOD:-none}" in
+      smb)
+        readarray -t p < <(download_latest_from_smb "$restore_dir")
+        db_path="${p[0]:-}"
+        cfg_path="${p[1]:-}"
+        ssl_path="${p[2]:-}"
+        ;;
+      ssh)
+        readarray -t p < <(download_latest_from_ssh "$restore_dir")
+        db_path="${p[0]:-}"
+        cfg_path="${p[1]:-}"
+        ssl_path="${p[2]:-}"
+        ;;
+    esac
+  else
+    readarray -t p < <(pick_latest_local_backups)
+    db_path="${p[0]:-}"
+    cfg_path="${p[1]:-}"
+    ssl_path="${p[2]:-}"
+  fi
+
+  if [ ! -f "$db_path" ] || [ ! -f "$cfg_path" ]; then
+    echo "File backup tidak lengkap."
+    exit 1
+  fi
+
+  sudo tar -xzf "$cfg_path" -C / >/dev/null 2>&1 || {
+    echo "Gagal restore config."
+    exit 1
+  }
+
+  if [ -f "$SINGLE_STATE_FILE" ]; then
+    set -a
+    . "$SINGLE_STATE_FILE" || true
+    set +a
+  fi
+  POSTGRES_DB="${POSTGRES_DB:-absensi}"
+  POSTGRES_USER="${POSTGRES_USER:-postgres}"
+  POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
+
+  $DOCKER_BIN compose -f "$COMPOSE_FILE" up -d postgres redis >/dev/null 2>&1 || true
+  max_pg_wait=180
+  waited_pg=0
+  until $DOCKER_BIN exec absenta-postgres pg_isready -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-absensi}" >/dev/null 2>&1; do
+    waited_pg=$((waited_pg+5))
+    if [ "$waited_pg" -ge "$max_pg_wait" ]; then
+      echo "PostgreSQL belum siap"
+      exit 1
+    fi
+    sleep 5
+  done
+
+  $DOCKER_BIN exec -e PGPASSWORD="$POSTGRES_PASSWORD" absenta-postgres \
+    psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 \
+    -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${POSTGRES_DB}' AND pid <> pg_backend_pid();" \
+    -c "DROP DATABASE IF EXISTS \"${POSTGRES_DB}\";" \
+    -c "CREATE DATABASE \"${POSTGRES_DB}\";" >/dev/null 2>&1 || {
+      echo "Gagal reset database."
+      exit 1
+    }
+
+  gunzip -c "$db_path" | $DOCKER_BIN exec -i -e PGPASSWORD="$POSTGRES_PASSWORD" absenta-postgres \
+    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 >/dev/null 2>&1 || {
+      echo "Gagal restore database."
+      exit 1
+    }
+
+  if [ -n "${ssl_path:-}" ] && [ -f "$ssl_path" ]; then
+    $DOCKER_BIN volume create absenta-letsencrypt >/dev/null 2>&1 || true
+    $DOCKER_BIN run --rm -v absenta-letsencrypt:/data -v "$restore_dir:/backup" bash:5 \
+      sh -lc "rm -rf /data/* 2>/dev/null || true; tar -xzf \"/backup/$(basename "$ssl_path")\" -C /data" >/dev/null 2>&1 || true
+  fi
+
+  script_path="$DIR/$(basename "$0")"
+  MODE=single ACTION=deploy RUN_MIGRATE=false RUN_SEED=false STACK_DOWN_FIRST=false /usr/bin/env bash "$script_path"
 }
 
 smb_mount_share() {
@@ -877,6 +1118,10 @@ run_non_deploy_action() {
       ;;
     setup_backup_remote)
       setup_backup_remote
+      exit 0
+      ;;
+    restore_single)
+      restore_single_oneclick
       exit 0
       ;;
   esac
