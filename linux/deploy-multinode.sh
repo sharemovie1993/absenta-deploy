@@ -356,13 +356,20 @@ download_latest_from_smb() {
     echo "Credentials SMB tidak ditemukan: $BACKUP_SMB_CREDENTIALS_FILE"
     exit 1
   fi
+  if [ -z "${BACKUP_SMB_SHARE:-}" ]; then
+    echo "BACKUP_SMB_SHARE belum diset."
+    exit 1
+  fi
+  if [[ "${BACKUP_SMB_SHARE:-}" != //* ]]; then
+    BACKUP_SMB_SHARE="//${BACKUP_SMB_SHARE}"
+  fi
   local out_dir="$1"
   mkdir -p "$out_dir" >/dev/null 2>&1 || true
 
   local cd_cmds
   cd_cmds="$(build_smbclient_cd_cmds "${BACKUP_SMB_SUBDIR:-}")"
 
-  echo "Mencari backup terbaru di SMB: ${BACKUP_SMB_SHARE} (subdir: ${BACKUP_SMB_SUBDIR:-/})"
+  echo "Mencari backup terbaru di SMB: ${BACKUP_SMB_SHARE} (subdir: ${BACKUP_SMB_SUBDIR:-/})" >&2
   list_cmd="${cd_cmds}ls;"
   if [ -n "${BACKUP_SMB_DOMAIN:-}" ]; then
     list_out="$(smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$list_cmd" 2>/dev/null || true)"
@@ -376,51 +383,51 @@ download_latest_from_smb() {
   latest_ssl="$(printf '%s\n' "$list_out" | awk '{print $1}' | grep -E '^absenta-letsencrypt-.*\.tar\.gz$' | sort | tail -n 1 || true)"
 
   if [ -z "${latest_db:-}" ] || [ -z "${latest_cfg:-}" ]; then
-    echo "File backup tidak ditemukan di SMB. Pastikan share + subfolder benar."
-    exit 1
+    echo "File backup tidak ditemukan di SMB. Pastikan share + subfolder benar." >&2
+    return 1
   fi
 
-  echo "Ditemukan:"
-  echo "- DB: ${latest_db}"
-  echo "- CFG: ${latest_cfg}"
+  echo "Ditemukan:" >&2
+  echo "- DB: ${latest_db}" >&2
+  echo "- CFG: ${latest_cfg}" >&2
   if [ -n "${latest_ssl:-}" ]; then
-    echo "- SSL: ${latest_ssl}"
+    echo "- SSL: ${latest_ssl}" >&2
   fi
 
   get_db_cmd="${cd_cmds}get \"${latest_db}\" \"${out_dir}/${latest_db}\";"
   get_cfg_cmd="${cd_cmds}get \"${latest_cfg}\" \"${out_dir}/${latest_cfg}\";"
   if [ -n "${BACKUP_SMB_DOMAIN:-}" ]; then
-    echo "Download DB dari SMB..."
-    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$get_db_cmd" || {
-      echo "Gagal download DB dari SMB."
-      exit 1
+    echo "Download DB dari SMB..." >&2
+    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$get_db_cmd" 1>&2 || {
+      echo "Gagal download DB dari SMB." >&2
+      return 1
     }
-    echo "Download config dari SMB..."
-    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$get_cfg_cmd" || {
-      echo "Gagal download config dari SMB."
-      exit 1
+    echo "Download config dari SMB..." >&2
+    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$get_cfg_cmd" 1>&2 || {
+      echo "Gagal download config dari SMB." >&2
+      return 1
     }
   else
-    echo "Download DB dari SMB..."
-    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$get_db_cmd" || {
-      echo "Gagal download DB dari SMB."
-      exit 1
+    echo "Download DB dari SMB..." >&2
+    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$get_db_cmd" 1>&2 || {
+      echo "Gagal download DB dari SMB." >&2
+      return 1
     }
-    echo "Download config dari SMB..."
-    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$get_cfg_cmd" || {
-      echo "Gagal download config dari SMB."
-      exit 1
+    echo "Download config dari SMB..." >&2
+    smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$get_cfg_cmd" 1>&2 || {
+      echo "Gagal download config dari SMB." >&2
+      return 1
     }
   fi
 
   if [ -n "${latest_ssl:-}" ]; then
     get_ssl_cmd="${cd_cmds}get \"${latest_ssl}\" \"${out_dir}/${latest_ssl}\";"
     if [ -n "${BACKUP_SMB_DOMAIN:-}" ]; then
-      echo "Download SSL (opsional) dari SMB..."
-      smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$get_ssl_cmd" || true
+      echo "Download SSL (opsional) dari SMB..." >&2
+      smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -W "$BACKUP_SMB_DOMAIN" -c "$get_ssl_cmd" 1>&2 || true
     else
-      echo "Download SSL (opsional) dari SMB..."
-      smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$get_ssl_cmd" || true
+      echo "Download SSL (opsional) dari SMB..." >&2
+      smbclient "$BACKUP_SMB_SHARE" -A "$BACKUP_SMB_CREDENTIALS_FILE" -c "$get_ssl_cmd" 1>&2 || true
     fi
   fi
 
@@ -457,18 +464,18 @@ download_latest_from_ssh() {
     exit 1
   fi
 
-  echo "Download DB dari SSH remote..."
+  echo "Download DB dari SSH remote..." >&2
   scp "${scp_args[@]}" "${remote}:${BACKUP_REMOTE_DIR}/${latest_db}" "${out_dir}/${latest_db}" || {
     echo "Gagal download DB dari SSH remote."
     exit 1
   }
-  echo "Download config dari SSH remote..."
+  echo "Download config dari SSH remote..." >&2
   scp "${scp_args[@]}" "${remote}:${BACKUP_REMOTE_DIR}/${latest_cfg}" "${out_dir}/${latest_cfg}" || {
     echo "Gagal download config dari SSH remote."
     exit 1
   }
   if [ -n "${latest_ssl:-}" ]; then
-    echo "Download SSL (opsional) dari SSH remote..."
+    echo "Download SSL (opsional) dari SSH remote..." >&2
     scp "${scp_args[@]}" "${remote}:${BACKUP_REMOTE_DIR}/${latest_ssl}" "${out_dir}/${latest_ssl}" || true
   fi
   printf '%s\n' "${out_dir}/${latest_db}" "${out_dir}/${latest_cfg}" "${out_dir}/${latest_ssl}"
@@ -521,24 +528,31 @@ restore_single_oneclick() {
   if offsite_enabled; then
     case "${BACKUP_OFFSITE_METHOD:-none}" in
       smb)
-        readarray -t p < <(download_latest_from_smb "$restore_dir")
-        db_path="${p[0]:-}"
-        cfg_path="${p[1]:-}"
-        ssl_path="${p[2]:-}"
+        if ! out="$(download_latest_from_smb "$restore_dir")"; then
+          echo "Gagal ambil backup terbaru dari SMB."
+          exit 1
+        fi
+        readarray -t p <<<"$out"
         ;;
       ssh)
-        readarray -t p < <(download_latest_from_ssh "$restore_dir")
-        db_path="${p[0]:-}"
-        cfg_path="${p[1]:-}"
-        ssl_path="${p[2]:-}"
+        if ! out="$(download_latest_from_ssh "$restore_dir")"; then
+          echo "Gagal ambil backup terbaru dari SSH remote."
+          exit 1
+        fi
+        readarray -t p <<<"$out"
+        ;;
+      *)
+        echo "Metode offsite tidak dikenali."
+        exit 1
         ;;
     esac
   else
-    readarray -t p < <(pick_latest_local_backups)
-    db_path="${p[0]:-}"
-    cfg_path="${p[1]:-}"
-    ssl_path="${p[2]:-}"
+    out="$(pick_latest_local_backups)"
+    readarray -t p <<<"$out"
   fi
+  db_path="${p[0]:-}"
+  cfg_path="${p[1]:-}"
+  ssl_path="${p[2]:-}"
   db_path="$(printf '%s' "${db_path:-}" | tr -d '\r' | xargs)"
   cfg_path="$(printf '%s' "${cfg_path:-}" | tr -d '\r' | xargs)"
   ssl_path="$(printf '%s' "${ssl_path:-}" | tr -d '\r' | xargs)"
