@@ -1864,17 +1864,27 @@ if [ "$MODE" = "single_no_nginx" ] && [ "${DEPLOY_FRONTEND:-true}" = "true" ]; t
   compose_profile_args+=(--profile with-frontend)
 fi
 
-$DOCKER_BIN compose "${compose_profile_args[@]}" -f "$COMPOSE_FILE" config >/dev/null
+compose_env_file="/tmp/absenta-compose.env.$$"
+umask 077
+{
+  echo "MINIO_ROOT_USER=${MINIO_ROOT_USER:-}"
+  echo "MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-}"
+  echo "S3_BUCKET=${S3_BUCKET:-}"
+  echo "MINIO_IMAGE=${MINIO_IMAGE:-}"
+  echo "MINIO_MC_IMAGE=${MINIO_MC_IMAGE:-}"
+} > "$compose_env_file"
+
+$DOCKER_BIN compose "${compose_profile_args[@]}" --env-file "$compose_env_file" -f "$COMPOSE_FILE" config >/dev/null
 
 if [ "$STACK_DOWN_FIRST" = "true" ]; then
-  $DOCKER_BIN compose "${compose_profile_args[@]}" -f "$COMPOSE_FILE" down || true
+  $DOCKER_BIN compose "${compose_profile_args[@]}" --env-file "$compose_env_file" -f "$COMPOSE_FILE" down || true
 fi
 
 build_args=()
 if [ "$NO_CACHE" = "true" ]; then
   build_args+=(--no-cache)
 fi
-$DOCKER_BIN compose -f "$COMPOSE_FILE" build "${build_args[@]}"
+$DOCKER_BIN compose --env-file "$compose_env_file" -f "$COMPOSE_FILE" build "${build_args[@]}"
 
 if [ "${DEPLOY_FRONTEND:-true}" = "true" ]; then
   vite_api="${PUBLIC_APP_URL%/}/api"
@@ -1923,7 +1933,7 @@ cat "$env_dir/env.common" "$env_dir/env.database" "$env_dir/env.redis" "$env_dir
 
 if [ "$RUN_MIGRATE" = "true" ]; then
   if [ "$MODE" = "single" ] || [ "$MODE" = "single_no_nginx" ]; then
-    $DOCKER_BIN compose -f "$COMPOSE_FILE" up -d postgres redis
+    $DOCKER_BIN compose --env-file "$compose_env_file" -f "$COMPOSE_FILE" up -d postgres redis
     max_pg_wait=180
     waited_pg=0
     until $DOCKER_BIN exec absenta-postgres pg_isready -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-absensi}" >/dev/null 2>&1; do
@@ -1956,7 +1966,7 @@ if [ "$RUN_MIGRATE" = "true" ]; then
   fi
 fi
 
-$DOCKER_BIN compose "${compose_profile_args[@]}" -f "$COMPOSE_FILE" up -d --remove-orphans
+$DOCKER_BIN compose "${compose_profile_args[@]}" --env-file "$compose_env_file" -f "$COMPOSE_FILE" up -d --remove-orphans
 $DOCKER_BIN ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
 
 setup_ssl_cron_single() {
