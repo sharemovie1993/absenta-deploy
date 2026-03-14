@@ -68,6 +68,13 @@ MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-}"
 MINIO_IMAGE="${MINIO_IMAGE:-}"
 MINIO_MC_IMAGE="${MINIO_MC_IMAGE:-}"
 
+REDIS_MODE="${REDIS_MODE:-}"
+REDIS_URL="${REDIS_URL:-}"
+REDIS_PASSWORD="${REDIS_PASSWORD:-}"
+REDIS_SENTINEL_HOSTS="${REDIS_SENTINEL_HOSTS:-}"
+REDIS_SENTINEL_NAME="${REDIS_SENTINEL_NAME:-}"
+REDIS_CLUSTER_NODES="${REDIS_CLUSTER_NODES:-}"
+
 # -----------------------------------------------------------------------------
 # Ensure dependencies (Ubuntu 22.x friendly). Skip if already installed.
 # -----------------------------------------------------------------------------
@@ -1356,6 +1363,12 @@ save_single_state() {
     echo "POSTGRES_DB=${POSTGRES_DB:-absensi}"
     echo "POSTGRES_USER=${POSTGRES_USER:-postgres}"
     echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}"
+    echo "REDIS_MODE=${REDIS_MODE:-single}"
+    echo "REDIS_URL=${REDIS_URL:-redis://redis:6379}"
+    echo "REDIS_PASSWORD=${REDIS_PASSWORD:-}"
+    echo "REDIS_SENTINEL_HOSTS=${REDIS_SENTINEL_HOSTS:-}"
+    echo "REDIS_SENTINEL_NAME=${REDIS_SENTINEL_NAME:-}"
+    echo "REDIS_CLUSTER_NODES=${REDIS_CLUSTER_NODES:-}"
     echo "DOMAIN=${DOMAIN:-}"
     echo "MAIN_DOMAIN=${MAIN_DOMAIN:-}"
     echo "CERTBOT_EMAIL=${CERTBOT_EMAIL:-}"
@@ -1398,6 +1411,11 @@ save_multi_state() {
   {
     echo "DATABASE_URL=${DATABASE_URL:-}"
     echo "REDIS_URL=${REDIS_URL:-}"
+    echo "REDIS_MODE=${REDIS_MODE:-single}"
+    echo "REDIS_PASSWORD=${REDIS_PASSWORD:-}"
+    echo "REDIS_SENTINEL_HOSTS=${REDIS_SENTINEL_HOSTS:-}"
+    echo "REDIS_SENTINEL_NAME=${REDIS_SENTINEL_NAME:-}"
+    echo "REDIS_CLUSTER_NODES=${REDIS_CLUSTER_NODES:-}"
     echo "PUBLIC_APP_URL=${PUBLIC_APP_URL:-}"
     echo "PUBLIC_INVOICE_BASE_URL=${PUBLIC_INVOICE_BASE_URL:-}"
     echo "HTTP_PORT=${HTTP_PORT:-}"
@@ -1514,9 +1532,16 @@ prompt_db_redis() {
     if [ -z "${DATABASE_URL:-}" ]; then
       DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
     fi
+    if [ -z "${REDIS_MODE:-}" ]; then
+      REDIS_MODE="single"
+    fi
     if [ -z "${REDIS_URL:-}" ]; then
       REDIS_URL="redis://redis:6379"
     fi
+    REDIS_PASSWORD="${REDIS_PASSWORD:-}"
+    REDIS_SENTINEL_HOSTS=""
+    REDIS_SENTINEL_NAME=""
+    REDIS_CLUSTER_NODES=""
 
     if [ -z "${MINIO_ROOT_USER:-}" ]; then
       MINIO_ROOT_USER="absenta-minio"
@@ -1574,11 +1599,60 @@ prompt_db_redis() {
       echo ""
       DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
     fi
-    if [ -z "${REDIS_URL:-}" ]; then
-      read -rp "REDIS_URL (contoh: redis://10.10.10.250:6379): " REDIS_URL
+
+    if [ -z "${REDIS_MODE:-}" ]; then
+      echo ""
+      echo "Pilih mode Redis:"
+      echo "1) single (REDIS_URL)"
+      echo "2) sentinel (REDIS_SENTINEL_HOSTS + REDIS_SENTINEL_NAME)"
+      echo "3) cluster (REDIS_CLUSTER_NODES)"
+      read -rp "Pilih [1]: " rm
+      case "$(printf '%s' "${rm:-1}" | tr '[:upper:]' '[:lower:]')" in
+        2|sentinel) REDIS_MODE="sentinel" ;;
+        3|cluster) REDIS_MODE="cluster" ;;
+        *) REDIS_MODE="single" ;;
+      esac
+    fi
+
+    if [ "$REDIS_MODE" = "single" ]; then
+      if [ -z "${REDIS_URL:-}" ]; then
+        read -rp "REDIS_URL (contoh: redis://10.10.10.250:6379): " REDIS_URL
+      fi
+      if [ -z "${REDIS_PASSWORD:-}" ]; then
+        read -rsp "REDIS_PASSWORD (opsional, kosong jika tidak ada): " REDIS_PASSWORD
+        echo ""
+      fi
+      REDIS_SENTINEL_HOSTS=""
+      REDIS_SENTINEL_NAME=""
+      REDIS_CLUSTER_NODES=""
+    elif [ "$REDIS_MODE" = "sentinel" ]; then
+      if [ -z "${REDIS_SENTINEL_HOSTS:-}" ]; then
+        read -rp "REDIS_SENTINEL_HOSTS (contoh: host1:26379,host2:26379,host3:26379): " REDIS_SENTINEL_HOSTS
+      fi
+      if [ -z "${REDIS_SENTINEL_NAME:-}" ]; then
+        read -rp "REDIS_SENTINEL_NAME (contoh: mymaster): " REDIS_SENTINEL_NAME
+      fi
+      if [ -z "${REDIS_PASSWORD:-}" ]; then
+        read -rsp "REDIS_PASSWORD (opsional, kosong jika tidak ada): " REDIS_PASSWORD
+        echo ""
+      fi
+      REDIS_URL="${REDIS_URL:-}"
+      REDIS_CLUSTER_NODES=""
+    else
+      if [ -z "${REDIS_CLUSTER_NODES:-}" ]; then
+        read -rp "REDIS_CLUSTER_NODES (contoh: node1:6379,node2:6379,node3:6379): " REDIS_CLUSTER_NODES
+      fi
+      if [ -z "${REDIS_PASSWORD:-}" ]; then
+        read -rsp "REDIS_PASSWORD (opsional, kosong jika tidak ada): " REDIS_PASSWORD
+        echo ""
+      fi
+      REDIS_URL="${REDIS_URL:-}"
+      REDIS_SENTINEL_HOSTS=""
+      REDIS_SENTINEL_NAME=""
     fi
   fi
-  export DATABASE_URL REDIS_URL POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD PUBLIC_APP_URL PUBLIC_INVOICE_BASE_URL
+  export DATABASE_URL REDIS_MODE REDIS_URL REDIS_PASSWORD REDIS_SENTINEL_HOSTS REDIS_SENTINEL_NAME REDIS_CLUSTER_NODES
+  export POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD PUBLIC_APP_URL PUBLIC_INVOICE_BASE_URL
   export STORAGE_DRIVER S3_ENDPOINT S3_BUCKET S3_REGION S3_ACCESS_KEY S3_SECRET_KEY S3_FORCE_PATH_STYLE S3_PUBLIC_BASE_URL S3_PRESIGN_EXPIRES_SECONDS
   export MINIO_ROOT_USER MINIO_ROOT_PASSWORD
   export MINIO_IMAGE MINIO_MC_IMAGE
@@ -1588,7 +1662,13 @@ if [ -t 0 ] && [ -t 1 ]; then
   prompt_db_redis
 else
   : "${DATABASE_URL:=}"
+  : "${REDIS_MODE:=single}"
   : "${REDIS_URL:=}"
+  : "${REDIS_PASSWORD:=}"
+  : "${REDIS_SENTINEL_HOSTS:=}"
+  : "${REDIS_SENTINEL_NAME:=}"
+  : "${REDIS_CLUSTER_NODES:=}"
+  export DATABASE_URL REDIS_MODE REDIS_URL REDIS_PASSWORD REDIS_SENTINEL_HOSTS REDIS_SENTINEL_NAME REDIS_CLUSTER_NODES
 fi
 
 prompt_ssl_single() {
@@ -1867,6 +1947,16 @@ fi
 compose_env_file="/tmp/absenta-compose.env.$$"
 umask 077
 {
+  echo "DATABASE_URL=${DATABASE_URL:-}"
+  echo "POSTGRES_DB=${POSTGRES_DB:-}"
+  echo "POSTGRES_USER=${POSTGRES_USER:-}"
+  echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}"
+  echo "REDIS_MODE=${REDIS_MODE:-single}"
+  echo "REDIS_URL=${REDIS_URL:-}"
+  echo "REDIS_PASSWORD=${REDIS_PASSWORD:-}"
+  echo "REDIS_SENTINEL_HOSTS=${REDIS_SENTINEL_HOSTS:-}"
+  echo "REDIS_SENTINEL_NAME=${REDIS_SENTINEL_NAME:-}"
+  echo "REDIS_CLUSTER_NODES=${REDIS_CLUSTER_NODES:-}"
   echo "MINIO_ROOT_USER=${MINIO_ROOT_USER:-}"
   echo "MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-}"
   echo "S3_BUCKET=${S3_BUCKET:-}"

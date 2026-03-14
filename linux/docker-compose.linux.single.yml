@@ -75,7 +75,12 @@ services:
       EMBEDDED_WORKERS: "false"
       PM2_DISABLED: "true"
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
+      REDIS_MODE: ${REDIS_MODE:-single}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_SENTINEL_HOSTS: ${REDIS_SENTINEL_HOSTS:-}
+      REDIS_SENTINEL_NAME: ${REDIS_SENTINEL_NAME:-}
+      REDIS_CLUSTER_NODES: ${REDIS_CLUSTER_NODES:-}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
       MAIN_DOMAIN: ${MAIN_DOMAIN:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
@@ -107,7 +112,12 @@ services:
     environment:
       NODE_NAME: node-api
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
+      REDIS_MODE: ${REDIS_MODE:-single}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_SENTINEL_HOSTS: ${REDIS_SENTINEL_HOSTS:-}
+      REDIS_SENTINEL_NAME: ${REDIS_SENTINEL_NAME:-}
+      REDIS_CLUSTER_NODES: ${REDIS_CLUSTER_NODES:-}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
       MAIN_DOMAIN: ${MAIN_DOMAIN:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
@@ -129,7 +139,12 @@ services:
     environment:
       NODE_NAME: node-billing
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
+      REDIS_MODE: ${REDIS_MODE:-single}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_SENTINEL_HOSTS: ${REDIS_SENTINEL_HOSTS:-}
+      REDIS_SENTINEL_NAME: ${REDIS_SENTINEL_NAME:-}
+      REDIS_CLUSTER_NODES: ${REDIS_CLUSTER_NODES:-}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
       MAIN_DOMAIN: ${MAIN_DOMAIN:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
@@ -151,7 +166,12 @@ services:
     environment:
       NODE_NAME: node-billing
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
+      REDIS_MODE: ${REDIS_MODE:-single}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_SENTINEL_HOSTS: ${REDIS_SENTINEL_HOSTS:-}
+      REDIS_SENTINEL_NAME: ${REDIS_SENTINEL_NAME:-}
+      REDIS_CLUSTER_NODES: ${REDIS_CLUSTER_NODES:-}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
       MAIN_DOMAIN: ${MAIN_DOMAIN:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
@@ -173,7 +193,12 @@ services:
     environment:
       NODE_NAME: node-attendance
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
+      REDIS_MODE: ${REDIS_MODE:-single}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_SENTINEL_HOSTS: ${REDIS_SENTINEL_HOSTS:-}
+      REDIS_SENTINEL_NAME: ${REDIS_SENTINEL_NAME:-}
+      REDIS_CLUSTER_NODES: ${REDIS_CLUSTER_NODES:-}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
       MAIN_DOMAIN: ${MAIN_DOMAIN:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
@@ -195,7 +220,12 @@ services:
     environment:
       NODE_NAME: node-attendance
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
+      REDIS_MODE: ${REDIS_MODE:-single}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_SENTINEL_HOSTS: ${REDIS_SENTINEL_HOSTS:-}
+      REDIS_SENTINEL_NAME: ${REDIS_SENTINEL_NAME:-}
+      REDIS_CLUSTER_NODES: ${REDIS_CLUSTER_NODES:-}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
       MAIN_DOMAIN: ${MAIN_DOMAIN:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
@@ -217,7 +247,12 @@ services:
     environment:
       NODE_NAME: node-attendance
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-absensi}}
+      REDIS_MODE: ${REDIS_MODE:-single}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_SENTINEL_HOSTS: ${REDIS_SENTINEL_HOSTS:-}
+      REDIS_SENTINEL_NAME: ${REDIS_SENTINEL_NAME:-}
+      REDIS_CLUSTER_NODES: ${REDIS_CLUSTER_NODES:-}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
       MAIN_DOMAIN: ${MAIN_DOMAIN:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
@@ -240,7 +275,12 @@ services:
       NODE_NAME: worker-agent
       AGENT_HANDLE_ALL_NODES: "true"
       AGENT_MAX_INSTANCES: "10"
+      REDIS_MODE: ${REDIS_MODE:-single}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_SENTINEL_HOSTS: ${REDIS_SENTINEL_HOSTS:-}
+      REDIS_SENTINEL_NAME: ${REDIS_SENTINEL_NAME:-}
+      REDIS_CLUSTER_NODES: ${REDIS_CLUSTER_NODES:-}
       CACHE_TTL_DEFAULT: ${CACHE_TTL_DEFAULT:-300}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
