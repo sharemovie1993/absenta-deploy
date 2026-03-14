@@ -1243,6 +1243,31 @@ load_backup_state() {
   BACKUP_SMB_DOMAIN="$(printf '%s' "${BACKUP_SMB_DOMAIN:-}" | tr -d '\r' | xargs)"
 }
 
+load_env_file_safe() {
+  local file="$1"
+  [ -f "$file" ] || return 0
+  while IFS= read -r line || [ -n "${line:-}" ]; do
+    line="${line//$'\r'/}"
+    [ -n "${line:-}" ] || continue
+    case "$line" in \#*) continue ;; esac
+    case "$line" in *=*) ;; *) continue ;; esac
+    local key="${line%%=*}"
+    local val="${line#*=}"
+    key="$(printf '%s' "$key" | xargs)"
+    val="$(printf '%s' "$val" | xargs)"
+    val="${val//\`/}"
+    val="${val#\"}"; val="${val%\"}"
+    val="${val#\'}"; val="${val%\'}"
+    case "$key" in
+      ''|*[!A-Za-z0-9_]*|[0-9]*)
+        continue
+        ;;
+    esac
+    printf -v "$key" '%s' "$val"
+    export "$key"
+  done < "$file"
+}
+
 save_backup_state() {
   if ! is_cmd sudo; then
     return 0
@@ -1280,9 +1305,7 @@ load_single_state() {
     return 0
   fi
   if [ -f "$SINGLE_STATE_FILE" ]; then
-    set -a
-    . "$SINGLE_STATE_FILE" || true
-    set +a
+    load_env_file_safe "$SINGLE_STATE_FILE"
   fi
   PUBLIC_APP_URL="${PUBLIC_APP_URL//\`/}"
   PUBLIC_APP_URL="${PUBLIC_APP_URL//\"/}"
@@ -1303,9 +1326,7 @@ load_multi_state() {
     return 0
   fi
   if [ -f "$MULTI_STATE_FILE" ]; then
-    set -a
-    . "$MULTI_STATE_FILE" || true
-    set +a
+    load_env_file_safe "$MULTI_STATE_FILE"
   fi
   PUBLIC_APP_URL="${PUBLIC_APP_URL//\`/}"
   PUBLIC_APP_URL="${PUBLIC_APP_URL//\"/}"
