@@ -65,6 +65,8 @@ S3_PUBLIC_BASE_URL="${S3_PUBLIC_BASE_URL:-}"
 S3_PRESIGN_EXPIRES_SECONDS="${S3_PRESIGN_EXPIRES_SECONDS:-}"
 MINIO_ROOT_USER="${MINIO_ROOT_USER:-}"
 MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-}"
+MINIO_IMAGE="${MINIO_IMAGE:-}"
+MINIO_MC_IMAGE="${MINIO_MC_IMAGE:-}"
 
 # -----------------------------------------------------------------------------
 # Ensure dependencies (Ubuntu 22.x friendly). Skip if already installed.
@@ -1355,6 +1357,8 @@ save_single_state() {
     echo "S3_PRESIGN_EXPIRES_SECONDS=${S3_PRESIGN_EXPIRES_SECONDS:-}"
     echo "MINIO_ROOT_USER=${MINIO_ROOT_USER:-}"
     echo "MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-}"
+    echo "MINIO_IMAGE=${MINIO_IMAGE:-}"
+    echo "MINIO_MC_IMAGE=${MINIO_MC_IMAGE:-}"
   } > "$tmp_state"
   sudo mv "$tmp_state" "$SINGLE_STATE_FILE" >/dev/null 2>&1 || true
   sudo chmod 600 "$SINGLE_STATE_FILE" >/dev/null 2>&1 || true
@@ -1530,6 +1534,12 @@ prompt_db_redis() {
     if [ -z "${STORAGE_DRIVER:-}" ]; then
       STORAGE_DRIVER="s3"
     fi
+    if [ -z "${MINIO_IMAGE:-}" ]; then
+      MINIO_IMAGE="minio/minio:latest"
+    fi
+    if [ -z "${MINIO_MC_IMAGE:-}" ]; then
+      MINIO_MC_IMAGE="minio/mc:latest"
+    fi
   else
     if [ -z "${DATABASE_URL:-}" ]; then
       read -rp "DB_HOST (contoh: 10.10.10.250): " DB_HOST
@@ -1550,6 +1560,7 @@ prompt_db_redis() {
   export DATABASE_URL REDIS_URL POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD PUBLIC_APP_URL PUBLIC_INVOICE_BASE_URL
   export STORAGE_DRIVER S3_ENDPOINT S3_BUCKET S3_REGION S3_ACCESS_KEY S3_SECRET_KEY S3_FORCE_PATH_STYLE S3_PUBLIC_BASE_URL S3_PRESIGN_EXPIRES_SECONDS
   export MINIO_ROOT_USER MINIO_ROOT_PASSWORD
+  export MINIO_IMAGE MINIO_MC_IMAGE
 }
 
 if [ -t 0 ] && [ -t 1 ]; then
