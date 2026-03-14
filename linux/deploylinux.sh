@@ -54,6 +54,17 @@ FRONTEND_REPO="${FRONTEND_REPO:-https://github.com/sharemovie1993/absenta_fronte
 FRONTEND_BRANCH="${FRONTEND_BRANCH:-master}"
 FRONTEND_PATH="${FRONTEND_PATH:-}"
 FRONTEND_IMAGE="${FRONTEND_IMAGE:-absenta-frontend:latest}"
+STORAGE_DRIVER="${STORAGE_DRIVER:-}"
+S3_ENDPOINT="${S3_ENDPOINT:-}"
+S3_BUCKET="${S3_BUCKET:-}"
+S3_REGION="${S3_REGION:-}"
+S3_ACCESS_KEY="${S3_ACCESS_KEY:-}"
+S3_SECRET_KEY="${S3_SECRET_KEY:-}"
+S3_FORCE_PATH_STYLE="${S3_FORCE_PATH_STYLE:-}"
+S3_PUBLIC_BASE_URL="${S3_PUBLIC_BASE_URL:-}"
+S3_PRESIGN_EXPIRES_SECONDS="${S3_PRESIGN_EXPIRES_SECONDS:-}"
+MINIO_ROOT_USER="${MINIO_ROOT_USER:-}"
+MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-}"
 
 # -----------------------------------------------------------------------------
 # Ensure dependencies (Ubuntu 22.x friendly). Skip if already installed.
@@ -1333,6 +1344,17 @@ save_single_state() {
     echo "DEPLOY_FRONTEND=${DEPLOY_FRONTEND:-}"
     echo "FRONTEND_REPO=${FRONTEND_REPO:-}"
     echo "FRONTEND_BRANCH=${FRONTEND_BRANCH:-}"
+    echo "STORAGE_DRIVER=${STORAGE_DRIVER:-}"
+    echo "S3_ENDPOINT=${S3_ENDPOINT:-}"
+    echo "S3_BUCKET=${S3_BUCKET:-}"
+    echo "S3_REGION=${S3_REGION:-}"
+    echo "S3_ACCESS_KEY=${S3_ACCESS_KEY:-}"
+    echo "S3_SECRET_KEY=${S3_SECRET_KEY:-}"
+    echo "S3_FORCE_PATH_STYLE=${S3_FORCE_PATH_STYLE:-}"
+    echo "S3_PUBLIC_BASE_URL=${S3_PUBLIC_BASE_URL:-}"
+    echo "S3_PRESIGN_EXPIRES_SECONDS=${S3_PRESIGN_EXPIRES_SECONDS:-}"
+    echo "MINIO_ROOT_USER=${MINIO_ROOT_USER:-}"
+    echo "MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-}"
   } > "$tmp_state"
   sudo mv "$tmp_state" "$SINGLE_STATE_FILE" >/dev/null 2>&1 || true
   sudo chmod 600 "$SINGLE_STATE_FILE" >/dev/null 2>&1 || true
@@ -1470,6 +1492,44 @@ prompt_db_redis() {
     if [ -z "${REDIS_URL:-}" ]; then
       REDIS_URL="redis://redis:6379"
     fi
+
+    if [ -z "${MINIO_ROOT_USER:-}" ]; then
+      MINIO_ROOT_USER="absenta-minio"
+    fi
+    if [ -z "${MINIO_ROOT_PASSWORD:-}" ]; then
+      if is_cmd openssl; then
+        MINIO_ROOT_PASSWORD="$(openssl rand -hex 24)"
+      else
+        MINIO_ROOT_PASSWORD="change-me"
+      fi
+    fi
+    if [ -z "${S3_BUCKET:-}" ]; then
+      S3_BUCKET="absenta-storage"
+    fi
+    if [ -z "${S3_ENDPOINT:-}" ]; then
+      S3_ENDPOINT="http://minio:9000"
+    fi
+    if [ -z "${S3_REGION:-}" ]; then
+      S3_REGION="us-east-1"
+    fi
+    if [ -z "${S3_FORCE_PATH_STYLE:-}" ]; then
+      S3_FORCE_PATH_STYLE="true"
+    fi
+    if [ -z "${S3_ACCESS_KEY:-}" ]; then
+      S3_ACCESS_KEY="$MINIO_ROOT_USER"
+    fi
+    if [ -z "${S3_SECRET_KEY:-}" ]; then
+      S3_SECRET_KEY="$MINIO_ROOT_PASSWORD"
+    fi
+    if [ -z "${S3_PUBLIC_BASE_URL:-}" ]; then
+      S3_PUBLIC_BASE_URL="http://localhost:9000/${S3_BUCKET}"
+    fi
+    if [ -z "${S3_PRESIGN_EXPIRES_SECONDS:-}" ]; then
+      S3_PRESIGN_EXPIRES_SECONDS="3600"
+    fi
+    if [ -z "${STORAGE_DRIVER:-}" ]; then
+      STORAGE_DRIVER="s3"
+    fi
   else
     if [ -z "${DATABASE_URL:-}" ]; then
       read -rp "DB_HOST (contoh: 10.10.10.250): " DB_HOST
@@ -1488,6 +1548,8 @@ prompt_db_redis() {
     fi
   fi
   export DATABASE_URL REDIS_URL POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD PUBLIC_APP_URL PUBLIC_INVOICE_BASE_URL
+  export STORAGE_DRIVER S3_ENDPOINT S3_BUCKET S3_REGION S3_ACCESS_KEY S3_SECRET_KEY S3_FORCE_PATH_STYLE S3_PUBLIC_BASE_URL S3_PRESIGN_EXPIRES_SECONDS
+  export MINIO_ROOT_USER MINIO_ROOT_PASSWORD
 }
 
 if [ -t 0 ] && [ -t 1 ]; then
