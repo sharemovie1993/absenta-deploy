@@ -1303,6 +1303,33 @@ save_backup_state() {
 }
 
 if [ "$ACTION" != "deploy" ]; then
+  if [ "$MODE" = "single" ] || [ "$MODE" = "single_no_nginx" ]; then
+    if [ -f "$SINGLE_STATE_FILE" ]; then
+      load_env_file_safe "$SINGLE_STATE_FILE"
+    fi
+    : "${REDIS_MODE:=single}"
+    : "${REDIS_URL:=redis://redis:6379}"
+    : "${REDIS_PASSWORD:=}"
+    : "${REDIS_SENTINEL_HOSTS:=}"
+    : "${REDIS_SENTINEL_NAME:=}"
+    : "${REDIS_CLUSTER_NODES:=}"
+    : "${MINIO_ROOT_USER:=absenta-minio}"
+    : "${MINIO_ROOT_PASSWORD:=change-me}"
+    : "${S3_BUCKET:=absenta-storage}"
+    export REDIS_MODE REDIS_URL REDIS_PASSWORD REDIS_SENTINEL_HOSTS REDIS_SENTINEL_NAME REDIS_CLUSTER_NODES
+    export MINIO_ROOT_USER MINIO_ROOT_PASSWORD S3_BUCKET
+  elif [ "$MODE" = "multi" ]; then
+    if [ -f "$MULTI_STATE_FILE" ]; then
+      load_env_file_safe "$MULTI_STATE_FILE"
+    fi
+    : "${REDIS_MODE:=single}"
+    : "${REDIS_URL:=}"
+    : "${REDIS_PASSWORD:=}"
+    : "${REDIS_SENTINEL_HOSTS:=}"
+    : "${REDIS_SENTINEL_NAME:=}"
+    : "${REDIS_CLUSTER_NODES:=}"
+    export REDIS_MODE REDIS_URL REDIS_PASSWORD REDIS_SENTINEL_HOSTS REDIS_SENTINEL_NAME REDIS_CLUSTER_NODES
+  fi
   load_backup_state
   run_non_deploy_action
 fi
