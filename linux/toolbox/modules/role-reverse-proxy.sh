@@ -15,13 +15,13 @@ read -rp "Jalankan hardening basic juga? (y/n) [y]: " ans
 ans="${ans:-y}"
 
 ensure_ufw
-as_root ufw default deny incoming >/dev/null
-as_root ufw default allow outgoing >/dev/null
-as_root ufw allow "${SSH_PORT:-22}/tcp" >/dev/null
-as_root ufw allow 80/tcp >/dev/null
-as_root ufw allow 443/tcp >/dev/null
-as_root ufw allow "$(wg_port)/udp" >/dev/null
-as_root ufw --force enable >/dev/null
+as_root ufw default deny incoming
+as_root ufw default allow outgoing
+as_root ufw allow "${SSH_PORT:-22}/tcp"
+as_root ufw allow 80/tcp
+as_root ufw allow 443/tcp
+as_root ufw allow "$(wg_port)/udp"
+as_root ufw --force enable
 echo "OK firewall baseline"
 
 if [ "${ans,,}" = "y" ]; then

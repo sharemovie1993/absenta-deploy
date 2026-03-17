@@ -26,7 +26,7 @@ fi
 echo "Installing k3s channel=$K3S_CHANNEL"
 as_root env "${INSTALL_ARGS[@]}" sh -lc "curl -sfL https://get.k3s.io | sh -"
 
-as_root sh -lc "mkdir -p /etc/absenta >/dev/null 2>&1 || true"
+as_root sh -lc "mkdir -p /etc/absenta || true"
 save_state_kv "ABSENTA_K8S_NAMESPACE" "$(ns_name)"
 
 echo "k3s installed"

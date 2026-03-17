@@ -8,20 +8,20 @@ ensure_ufw
 
 allow_ssh() {
   local port="${SSH_PORT:-22}"
-  as_root ufw allow "${port}/tcp" >/dev/null
+  as_root ufw allow "${port}/tcp"
   echo "OK allow SSH ${port}/tcp"
 }
 
 allow_http_https() {
-  as_root ufw allow 80/tcp >/dev/null
-  as_root ufw allow 443/tcp >/dev/null
+  as_root ufw allow 80/tcp
+  as_root ufw allow 443/tcp
   echo "OK allow 80/tcp, 443/tcp"
 }
 
 allow_wireguard() {
   local port
   port="$(wg_port)"
-  as_root ufw allow "${port}/udp" >/dev/null
+  as_root ufw allow "${port}/udp"
   echo "OK allow WireGuard ${port}/udp"
 }
 
@@ -30,17 +30,17 @@ allow_from_wg_to_port() {
   read -rp "Port (contoh 5432): " p
   read -rp "Proto (tcp/udp) [tcp]: " proto
   proto="${proto:-tcp}"
-  as_root ufw allow from "$wgsub" to any port "$p" proto "$proto" >/dev/null
+  as_root ufw allow from "$wgsub" to any port "$p" proto "$proto"
   echo "OK allow from ${wgsub} to port ${p}/${proto}"
 }
 
 enable_ufw_safe() {
-  as_root ufw default deny incoming >/dev/null
-  as_root ufw default allow outgoing >/dev/null
+  as_root ufw default deny incoming
+  as_root ufw default allow outgoing
   allow_ssh
-  as_root ufw --force enable >/dev/null
+  as_root ufw --force enable
   echo "UFW enabled (default deny incoming, allow outgoing)"
-}
+
 
 while true; do
   echo ""

@@ -28,6 +28,7 @@ ubuntu_codename() {
 
 apt_update_once() {
   if [ -z "${_APT_UPDATED_ONCE:-}" ]; then
+    echo "--> Melakukan apt-get update..."
     as_root apt-get update -y
     _APT_UPDATED_ONCE="yes"
   fi
@@ -36,12 +37,16 @@ apt_update_once() {
 apt_ensure() {
   local pkg="$1"
   if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+    echo "--> Memasang paket: $pkg..."
     apt_update_once
     as_root apt-get install -y "$pkg"
+  else
+    echo "--> Paket $pkg sudah terpasang."
   fi
 }
 
 ensure_systemd() {
+  echo "--> Memeriksa systemd..."
   is_cmd systemctl || { echo "systemctl not found (systemd required)"; exit 1; }
 }
 
@@ -49,7 +54,8 @@ download_file() {
   local url="$1"
   local out="$2"
   need_cmd curl
-  curl -fsSL "$url" -o "$out"
+  echo "--> Mengunduh file dari $url ke $out..."
+  curl -L "$url" -o "$out"
 }
 
 ensure_ufw() { apt_ensure ufw; }

@@ -19,12 +19,12 @@ read -rp "WireGuard subnet yang boleh akses (contoh 10.8.0.0/24): " WG_SUBNET
 [ -n "${WG_SUBNET:-}" ] || { echo "WG_SUBNET kosong"; exit 1; }
 
 ensure_ufw
-as_root ufw default deny incoming >/dev/null
-as_root ufw default allow outgoing >/dev/null
-as_root ufw allow "${SSH_PORT:-22}/tcp" >/dev/null
-as_root ufw allow "$(wg_port)/udp" >/dev/null
-as_root ufw allow from "${WG_SUBNET}" to any port 6379 proto tcp >/dev/null
-as_root ufw --force enable >/dev/null
+as_root ufw default deny incoming
+as_root ufw default allow outgoing
+as_root ufw allow "${SSH_PORT:-22}/tcp"
+as_root ufw allow "$(wg_port)/udp"
+as_root ufw allow from "${WG_SUBNET}" to any port 6379 proto tcp
+as_root ufw --force enable
 
 echo "Sekarang konfigurasi redis.conf (bind + requirepass)."
 bash "$DIR/redis-config-wireguard.sh"

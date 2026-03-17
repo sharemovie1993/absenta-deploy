@@ -16,13 +16,13 @@ apt_ensure unattended-upgrades
 apt_ensure fail2ban
 ensure_ufw
 
-as_root ufw default deny incoming >/dev/null
-as_root ufw default allow outgoing >/dev/null
-as_root ufw allow "${SSH_PORT:-22}/tcp" >/dev/null
-as_root ufw --force enable >/dev/null
+as_root ufw default deny incoming
+as_root ufw default allow outgoing
+as_root ufw allow "${SSH_PORT:-22}/tcp"
+as_root ufw --force enable
 
-as_root systemctl enable --now fail2ban >/dev/null 2>&1 || true
-as_root systemctl enable --now unattended-upgrades >/dev/null 2>&1 || true
+as_root systemctl enable --now fail2ban || true
+as_root systemctl enable --now unattended-upgrades || true
 
 echo "OK"
 
