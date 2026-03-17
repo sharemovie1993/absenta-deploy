@@ -15,18 +15,18 @@ ensure_tools() {
 
 ensure_tools
 
-run_status() { echo "--> Memeriksa status server..."; bash -x "$DIR/modules/status.sh"; }
-run_firewall_menu() { echo "--> Membuka menu firewall..."; bash -x "$DIR/modules/firewall-menu.sh"; }
-run_hardening() { echo "--> Menjalankan hardening basic..."; bash -x "$DIR/modules/hardening-basic.sh"; }
-run_wireguard_menu() { echo "--> Membuka menu WireGuard..."; bash -x "$DIR/modules/wireguard-menu.sh"; }
-run_postgres_menu() { echo "--> Membuka menu PostgreSQL..."; bash -x "$DIR/modules/postgres-menu.sh"; }
-run_redis_menu() { echo "--> Membuka menu Redis..."; bash -x "$DIR/modules/redis-menu.sh"; }
-run_ssh_menu() { echo "--> Membuka menu SSH..."; bash -x "$DIR/modules/ssh-menu.sh"; }
-run_network_menu() { echo "--> Membuka menu Network..."; bash -x "$DIR/modules/network-menu.sh"; }
-run_time_sync() { echo "--> Melakukan sinkronisasi waktu..."; bash -x "$DIR/modules/time-sync.sh"; }
-run_role_wizard() { echo "--> Membuka role wizard..."; bash -x "$DIR/modules/role-wizard.sh"; }
-run_monitoring_menu() { echo "--> Membuka menu monitoring..."; bash -x "$DIR/modules/monitoring-menu.sh"; }
-run_runbook_menu() { echo "--> Membuka menu runbook..."; bash -x "$DIR/modules/runbook-menu.sh"; }
+run_status() { echo "--> Memeriksa status server..."; bash "$DIR/modules/status.sh"; }
+run_firewall_menu() { echo "--> Membuka menu firewall..."; bash "$DIR/modules/firewall-menu.sh"; }
+run_hardening() { echo "--> Menjalankan hardening basic..."; bash "$DIR/modules/hardening-basic.sh"; }
+run_wireguard_menu() { echo "--> Membuka menu WireGuard..."; bash "$DIR/modules/wireguard-menu.sh"; }
+run_postgres_menu() { echo "--> Membuka menu PostgreSQL..."; bash "$DIR/modules/postgres-menu.sh"; }
+run_redis_menu() { echo "--> Membuka menu Redis..."; bash "$DIR/modules/redis-menu.sh"; }
+run_ssh_menu() { echo "--> Membuka menu SSH..."; bash "$DIR/modules/ssh-menu.sh"; }
+run_network_menu() { echo "--> Membuka menu Network..."; bash "$DIR/modules/network-menu.sh"; }
+run_time_sync() { echo "--> Melakukan sinkronisasi waktu..."; bash "$DIR/modules/time-sync.sh"; }
+run_role_wizard() { echo "--> Membuka role wizard..."; bash "$DIR/modules/role-wizard.sh"; }
+run_monitoring_menu() { echo "--> Membuka menu monitoring..."; bash "$DIR/modules/monitoring-menu.sh"; }
+run_runbook_menu() { echo "--> Membuka menu runbook..."; bash "$DIR/modules/runbook-menu.sh"; }
 run_k8s_menu() {
   local k8s_script="$DIR/../k8s/absenta-k8s.sh"
   if [ -f "$k8s_script" ]; then

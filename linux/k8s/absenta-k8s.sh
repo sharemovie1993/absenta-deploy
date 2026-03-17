@@ -16,16 +16,16 @@ ensure_tools() {
   need_cmd uname
 }
 
-run_install_k3s() { echo "--> Memulai instalasi/update k3s..."; bash -x "$DIR/modules/k3s-install.sh"; }
-run_build() { echo "--> Memulai build images (backend/frontend)..."; bash -x "$DIR/modules/k8s-build.sh"; }
-run_deploy() { echo "--> Memulai deploy/update Absenta ke k3s..."; bash -x "$DIR/modules/k8s-deploy.sh"; }
-run_migrate() { echo "--> Menjalankan database migration & seed..."; bash -x "$DIR/modules/k8s-migrate.sh"; }
-run_status() { echo "--> Memeriksa status pods/svc..."; bash -x "$DIR/modules/k8s-status.sh"; }
-run_logs() { echo "--> Menampilkan log backend-api..."; bash -x "$DIR/modules/k8s-logs.sh"; }
-run_restart() { echo "--> Melakukan restart layanan (rollout)..."; bash -x "$DIR/modules/k8s-restart.sh"; }
-run_uninstall_app() { echo "--> Memulai uninstall Absenta (hapus namespace)..."; bash -x "$DIR/modules/k8s-uninstall-app.sh"; }
-run_uninstall_k3s() { echo "--> Memulai uninstall k3s (hapus cluster)..."; bash -x "$DIR/modules/k3s-uninstall.sh"; }
-run_runbook() { echo "--> Membuka menu runbook..."; bash -x "$DIR/modules/runbook.sh"; }
+run_install_k3s() { echo "--> Memulai instalasi/update k3s..."; bash "$DIR/modules/k3s-install.sh"; }
+run_build() { echo "--> Memulai build images (backend/frontend)..."; bash "$DIR/modules/k8s-build.sh"; }
+run_deploy() { echo "--> Memulai deploy/update Absenta ke k3s..."; bash "$DIR/modules/k8s-deploy.sh"; }
+run_migrate() { echo "--> Menjalankan database migration & seed..."; bash "$DIR/modules/k8s-migrate.sh"; }
+run_status() { echo "--> Memeriksa status pods/svc..."; bash "$DIR/modules/k8s-status.sh"; }
+run_logs() { echo "--> Menampilkan log backend-api..."; bash "$DIR/modules/k8s-logs.sh"; }
+run_restart() { echo "--> Melakukan restart layanan (rollout)..."; bash "$DIR/modules/k8s-restart.sh"; }
+run_uninstall_app() { echo "--> Memulai uninstall Absenta (hapus namespace)..."; bash "$DIR/modules/k8s-uninstall-app.sh"; }
+run_uninstall_k3s() { echo "--> Memulai uninstall k3s (hapus cluster)..."; bash "$DIR/modules/k3s-uninstall.sh"; }
+run_runbook() { echo "--> Membuka menu runbook..."; bash "$DIR/modules/runbook.sh"; }
 run_old_menu() {
   local old_script="$DIR/../deploy_old/absenta_menu.sh"
   if [ -f "$old_script" ]; then
