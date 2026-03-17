@@ -27,6 +27,16 @@ run_time_sync() { echo "--> Melakukan sinkronisasi waktu..."; bash "$DIR/modules
 run_role_wizard() { echo "--> Membuka role wizard..."; bash "$DIR/modules/role-wizard.sh"; }
 run_monitoring_menu() { echo "--> Membuka menu monitoring..."; bash "$DIR/modules/monitoring-menu.sh"; }
 run_runbook_menu() { echo "--> Membuka menu runbook..."; bash "$DIR/modules/runbook-menu.sh"; }
+run_k8s_menu() {
+  local k8s_script="$DIR/../k8s/absenta-k8s.sh"
+  if [ -f "$k8s_script" ]; then
+    echo "--> Berpindah ke Menu K8s..."
+    cd "$(dirname "$k8s_script")" && exec bash "$(basename "$k8s_script")"
+  else
+    echo "Kesalahan: Menu K8s tidak ditemukan di $k8s_script"
+    sleep 2
+  fi
+}
 
 if [ ! -t 0 ] || [ ! -t 1 ]; then
   run_status
@@ -48,6 +58,7 @@ while true; do
   echo "10) Role wizard (reverse-proxy / backend / postgres / redis)"
   echo "11) Monitoring menu (node exporter / health checks)"
   echo "12) Runbook (baca panduan dari menu)"
+  echo "13) Ke Menu K8S (k3s/deploy)"
   echo "0) Keluar"
   read -rp "Pilih: " opt
   case "${opt:-}" in
@@ -63,6 +74,7 @@ while true; do
     10) run_role_wizard ;;
     11) run_monitoring_menu ;;
     12) run_runbook_menu ;;
+    13) run_k8s_menu ;;
     0) exit 0 ;;
     *) echo "Pilihan tidak dikenal" ;;
   esac

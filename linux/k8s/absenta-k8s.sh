@@ -23,6 +23,16 @@ run_logs() { echo "--> Menampilkan log backend-api..."; bash "$DIR/modules/k8s-l
 run_uninstall_app() { echo "--> Memulai uninstall Absenta (hapus namespace)..."; bash "$DIR/modules/k8s-uninstall-app.sh"; }
 run_uninstall_k3s() { echo "--> Memulai uninstall k3s (hapus cluster)..."; bash "$DIR/modules/k3s-uninstall.sh"; }
 run_runbook() { echo "--> Membuka menu runbook..."; bash "$DIR/modules/runbook.sh"; }
+run_toolbox_menu() {
+  local toolbox_script="$DIR/../toolbox/absenta-toolbox.sh"
+  if [ -f "$toolbox_script" ]; then
+    echo "--> Berpindah ke Menu Toolbox..."
+    cd "$(dirname "$toolbox_script")" && exec bash "$(basename "$toolbox_script")"
+  else
+    echo "Kesalahan: Menu Toolbox tidak ditemukan di $toolbox_script"
+    sleep 2
+  fi
+}
 
 ensure_tools
 
@@ -41,6 +51,7 @@ while true; do
   echo "5) Runbook (baca panduan dari menu)"
   echo "6) Uninstall Absenta (hapus namespace)"
   echo "7) Uninstall k3s (hapus cluster di node ini)"
+  echo "8) Ke Menu Toolbox (Infra/DB/Safe)"
   echo "0) Keluar"
   read -rp "Pilih: " opt
   case "${opt:-}" in
@@ -51,6 +62,7 @@ while true; do
     5) run_runbook ;;
     6) run_uninstall_app ;;
     7) run_uninstall_k3s ;;
+    8) run_toolbox_menu ;;
     0) exit 0 ;;
     *) echo "Pilihan tidak dikenal" ;;
   esac
