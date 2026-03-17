@@ -26,14 +26,32 @@ REPL_ANALYTICS="${K8S_REPL_ANALYTICS:-1}"
 REPL_MAINTENANCE="${K8S_REPL_MAINTENANCE:-1}"
 REPL_INFRA="${K8S_REPL_INFRA:-1}"
 
+# Ambil semua variabel penting dari env files
+NODE_ENV="${NODE_ENV:-production}"
+NODE_ID="${NODE_ID:-node-1}"
+APP_VERSION="${APP_VERSION:-1.0.0}"
+WORKER_VERSION="${WORKER_VERSION:-1.0.0}"
+MAIN_DOMAIN="${MAIN_DOMAIN:-}"
+PUBLIC_APP_URL="${PUBLIC_APP_URL:-}"
+PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL:-}"
+STORAGE_DRIVER="${STORAGE_DRIVER:-s3}"
+S3_ENDPOINT="${S3_ENDPOINT:-}"
+S3_BUCKET="${S3_BUCKET:-absenta-storage}"
+S3_REGION="${S3_REGION:-us-east-1}"
+S3_ACCESS_KEY="${S3_ACCESS_KEY:-}"
+S3_SECRET_KEY="${S3_SECRET_KEY:-}"
+S3_FORCE_PATH_STYLE="${S3_FORCE_PATH_STYLE:-true}"
+S3_PUBLIC_BASE_URL="${S3_PUBLIC_BASE_URL:-}"
+
 DATABASE_URL="${DATABASE_URL:-}"
+REDIS_MODE="${REDIS_MODE:-single}"
 REDIS_URL="${REDIS_URL:-}"
 REDIS_PASSWORD="${REDIS_PASSWORD:-}"
 JWT_SECRET="${JWT_SECRET:-}"
 
-[ -n "$DATABASE_URL" ] || { echo "DATABASE_URL is empty (set in ../env/env.database or /etc/absenta/k8s.env)"; exit 1; }
-[ -n "$REDIS_URL" ] || { echo "REDIS_URL is empty (set in ../env/env.redis or /etc/absenta/k8s.env)"; exit 1; }
-[ -n "$JWT_SECRET" ] || { echo "JWT_SECRET is empty (set in ../env/env.common)"; exit 1; }
+[ -n "$DATABASE_URL" ] || { echo "DATABASE_URL is empty"; exit 1; }
+[ -n "$REDIS_URL" ] || { echo "REDIS_URL is empty"; exit 1; }
+[ -n "$JWT_SECRET" ] || { echo "JWT_SECRET is empty"; exit 1; }
 
 b64() { printf '%s' "$1" | base64 | tr -d '\n'; }
 
@@ -63,12 +81,9 @@ data:
   REDIS_URL: $(b64 "$REDIS_URL")
   REDIS_PASSWORD: $(b64 "$REDIS_PASSWORD")
   JWT_SECRET: $(b64 "$JWT_SECRET")
+  S3_ACCESS_KEY: $(b64 "$S3_ACCESS_KEY")
+  S3_SECRET_KEY: $(b64 "$S3_SECRET_KEY")
 YAML
-
-MAIN_DOMAIN="${MAIN_DOMAIN:-}"
-PUBLIC_APP_URL="${PUBLIC_APP_URL:-}"
-PUBLIC_INVOICE_BASE_URL="${PUBLIC_INVOICE_BASE_URL:-}"
-CACHE_TTL_DEFAULT="${CACHE_TTL_DEFAULT:-300}"
 
 cat > "$OUT_DIR/02-config.yaml" <<YAML
 apiVersion: v1
@@ -77,10 +92,20 @@ metadata:
   name: absenta-config
   namespace: ${NAMESPACE}
 data:
+  NODE_ENV: "${NODE_ENV}"
+  NODE_ID: "${NODE_ID}"
+  APP_VERSION: "${APP_VERSION}"
+  WORKER_VERSION: "${WORKER_VERSION}"
   MAIN_DOMAIN: "${MAIN_DOMAIN}"
   PUBLIC_APP_URL: "${PUBLIC_APP_URL}"
   PUBLIC_INVOICE_BASE_URL: "${PUBLIC_INVOICE_BASE_URL}"
-  CACHE_TTL_DEFAULT: "${CACHE_TTL_DEFAULT}"
+  REDIS_MODE: "${REDIS_MODE}"
+  STORAGE_DRIVER: "${STORAGE_DRIVER}"
+  S3_ENDPOINT: "${S3_ENDPOINT}"
+  S3_BUCKET: "${S3_BUCKET}"
+  S3_REGION: "${S3_REGION}"
+  S3_FORCE_PATH_STYLE: "${S3_FORCE_PATH_STYLE}"
+  S3_PUBLIC_BASE_URL: "${S3_PUBLIC_BASE_URL}"
   EMBEDDED_WORKERS: "false"
   PM2_DISABLED: "true"
 YAML
