@@ -16,21 +16,21 @@ ensure_tools() {
   need_cmd uname
 }
 
-run_install_k3s() { echo "--> Memulai instalasi/update k3s..."; bash -vx "$DIR/modules/k3s-install.sh"; }
-run_build() { echo "--> Memulai build images (backend/frontend)..."; bash -vx "$DIR/modules/k8s-build.sh"; }
-run_deploy() { echo "--> Memulai deploy/update Absenta ke k3s..."; bash -vx "$DIR/modules/k8s-deploy.sh"; }
-run_migrate() { echo "--> Menjalankan database migration & seed..."; bash -vx "$DIR/modules/k8s-migrate.sh"; }
-run_status() { echo "--> Memeriksa status pods/svc..."; bash -vx "$DIR/modules/k8s-status.sh"; }
-run_logs() { echo "--> Menampilkan log backend-api..."; bash -vx "$DIR/modules/k8s-logs.sh"; }
-run_restart() { echo "--> Melakukan restart layanan (rollout)..."; bash -vx "$DIR/modules/k8s-restart.sh"; }
-run_uninstall_app() { echo "--> Memulai uninstall Absenta (hapus namespace)..."; bash -vx "$DIR/modules/k8s-uninstall-app.sh"; }
-run_uninstall_k3s() { echo "--> Memulai uninstall k3s (hapus cluster)..."; bash -vx "$DIR/modules/k3s-uninstall.sh"; }
-run_runbook() { echo "--> Membuka menu runbook..."; bash -vx "$DIR/modules/runbook.sh"; }
+run_install_k3s() { echo "--> Memulai instalasi/update k3s..."; bash -x "$DIR/modules/k3s-install.sh"; }
+run_build() { echo "--> Memulai build images (backend/frontend)..."; bash -x "$DIR/modules/k8s-build.sh"; }
+run_deploy() { echo "--> Memulai deploy/update Absenta ke k3s..."; bash -x "$DIR/modules/k8s-deploy.sh"; }
+run_migrate() { echo "--> Menjalankan database migration & seed..."; bash -x "$DIR/modules/k8s-migrate.sh"; }
+run_status() { echo "--> Memeriksa status pods/svc..."; bash -x "$DIR/modules/k8s-status.sh"; }
+run_logs() { echo "--> Menampilkan log backend-api..."; bash -x "$DIR/modules/k8s-logs.sh"; }
+run_restart() { echo "--> Melakukan restart layanan (rollout)..."; bash -x "$DIR/modules/k8s-restart.sh"; }
+run_uninstall_app() { echo "--> Memulai uninstall Absenta (hapus namespace)..."; bash -x "$DIR/modules/k8s-uninstall-app.sh"; }
+run_uninstall_k3s() { echo "--> Memulai uninstall k3s (hapus cluster)..."; bash -x "$DIR/modules/k3s-uninstall.sh"; }
+run_runbook() { echo "--> Membuka menu runbook..."; bash -x "$DIR/modules/runbook.sh"; }
 run_old_menu() {
   local old_script="$DIR/../deploy_old/absenta_menu.sh"
   if [ -f "$old_script" ]; then
     echo "--> Berpindah ke Menu Lama (Legacy)..."
-    cd "$(dirname "$old_script")" && exec bash -vx "$(basename "$old_script")"
+    cd "$(dirname "$old_script")" && exec bash "$(basename "$old_script")"
   else
     echo "Kesalahan: Menu Lama tidak ditemukan di $old_script"
     sleep 2
@@ -40,7 +40,7 @@ run_toolbox_menu() {
   local toolbox_script="$DIR/../toolbox/absenta-toolbox.sh"
   if [ -f "$toolbox_script" ]; then
     echo "--> Berpindah ke Menu Toolbox..."
-    cd "$(dirname "$toolbox_script")" && exec bash -vx "$(basename "$toolbox_script")"
+    cd "$(dirname "$toolbox_script")" && exec bash "$(basename "$toolbox_script")"
   else
     echo "Kesalahan: Menu Toolbox tidak ditemukan di $toolbox_script"
     sleep 2

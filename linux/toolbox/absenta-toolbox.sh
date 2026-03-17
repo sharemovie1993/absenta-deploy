@@ -15,23 +15,23 @@ ensure_tools() {
 
 ensure_tools
 
-run_status() { echo "--> Memeriksa status server..."; bash -vx "$DIR/modules/status.sh"; }
-run_firewall_menu() { echo "--> Membuka menu firewall..."; bash -vx "$DIR/modules/firewall-menu.sh"; }
-run_hardening() { echo "--> Menjalankan hardening basic..."; bash -vx "$DIR/modules/hardening-basic.sh"; }
-run_wireguard_menu() { echo "--> Membuka menu WireGuard..."; bash -vx "$DIR/modules/wireguard-menu.sh"; }
-run_postgres_menu() { echo "--> Membuka menu PostgreSQL..."; bash -vx "$DIR/modules/postgres-menu.sh"; }
-run_redis_menu() { echo "--> Membuka menu Redis..."; bash -vx "$DIR/modules/redis-menu.sh"; }
-run_ssh_menu() { echo "--> Membuka menu SSH..."; bash -vx "$DIR/modules/ssh-menu.sh"; }
-run_network_menu() { echo "--> Membuka menu Network..."; bash -vx "$DIR/modules/network-menu.sh"; }
-run_time_sync() { echo "--> Melakukan sinkronisasi waktu..."; bash -vx "$DIR/modules/time-sync.sh"; }
-run_role_wizard() { echo "--> Membuka role wizard..."; bash -vx "$DIR/modules/role-wizard.sh"; }
-run_monitoring_menu() { echo "--> Membuka menu monitoring..."; bash -vx "$DIR/modules/monitoring-menu.sh"; }
-run_runbook_menu() { echo "--> Membuka menu runbook..."; bash -vx "$DIR/modules/runbook-menu.sh"; }
+run_status() { echo "--> Memeriksa status server..."; bash -x "$DIR/modules/status.sh"; }
+run_firewall_menu() { echo "--> Membuka menu firewall..."; bash -x "$DIR/modules/firewall-menu.sh"; }
+run_hardening() { echo "--> Menjalankan hardening basic..."; bash -x "$DIR/modules/hardening-basic.sh"; }
+run_wireguard_menu() { echo "--> Membuka menu WireGuard..."; bash -x "$DIR/modules/wireguard-menu.sh"; }
+run_postgres_menu() { echo "--> Membuka menu PostgreSQL..."; bash -x "$DIR/modules/postgres-menu.sh"; }
+run_redis_menu() { echo "--> Membuka menu Redis..."; bash -x "$DIR/modules/redis-menu.sh"; }
+run_ssh_menu() { echo "--> Membuka menu SSH..."; bash -x "$DIR/modules/ssh-menu.sh"; }
+run_network_menu() { echo "--> Membuka menu Network..."; bash -x "$DIR/modules/network-menu.sh"; }
+run_time_sync() { echo "--> Melakukan sinkronisasi waktu..."; bash -x "$DIR/modules/time-sync.sh"; }
+run_role_wizard() { echo "--> Membuka role wizard..."; bash -x "$DIR/modules/role-wizard.sh"; }
+run_monitoring_menu() { echo "--> Membuka menu monitoring..."; bash -x "$DIR/modules/monitoring-menu.sh"; }
+run_runbook_menu() { echo "--> Membuka menu runbook..."; bash -x "$DIR/modules/runbook-menu.sh"; }
 run_k8s_menu() {
   local k8s_script="$DIR/../k8s/absenta-k8s.sh"
   if [ -f "$k8s_script" ]; then
     echo "--> Berpindah ke Menu K8s..."
-    cd "$(dirname "$k8s_script")" && exec bash -vx "$(basename "$k8s_script")"
+    cd "$(dirname "$k8s_script")" && exec bash "$(basename "$k8s_script")"
   else
     echo "Kesalahan: Menu K8s tidak ditemukan di $k8s_script"
     sleep 2
@@ -41,7 +41,7 @@ run_old_menu() {
   local old_script="$DIR/../deploy_old/absenta_menu.sh"
   if [ -f "$old_script" ]; then
     echo "--> Berpindah ke Menu Lama (Legacy)..."
-    cd "$(dirname "$old_script")" && exec bash -vx "$(basename "$old_script")"
+    cd "$(dirname "$old_script")" && exec bash "$(basename "$old_script")"
   else
     echo "Kesalahan: Menu Lama tidak ditemukan di $old_script"
     sleep 2
