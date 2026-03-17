@@ -15,9 +15,30 @@ FRONTEND_REPO="${FRONTEND_REPO:-https://github.com/sharemovie1993/absenta_fronte
 BACKEND_BRANCH="${BACKEND_BRANCH:-master}"
 FRONTEND_BRANCH="${FRONTEND_BRANCH:-master}"
 
-# Jalur lokal (bisa di-override lewat env)
+# Jalur lokal
 BACKEND_PATH="${BACKEND_PATH:-$DIR/../../../absenta_backend}"
 FRONTEND_PATH="${FRONTEND_PATH:-$DIR/../../../absenta_frontend}"
+
+# Fungsi helper untuk menambahkan token ke URL HTTPS jika ada
+apply_git_token() {
+  local url="$1"
+  local user="${GITHUB_USERNAME:-}"
+  local token="${GITHUB_TOKEN:-}"
+  if [ -n "$token" ]; then
+    # Jika URL diawali https://, sisipkan user:token@
+    if [[ "$url" == https://* ]]; then
+      local proto="https://"
+      local rest="${url#https://}"
+      if [ -n "$user" ]; then
+        printf "https://%s:%s@%s" "$user" "$token" "$rest"
+      else
+        printf "https://%s@%s" "$token" "$rest"
+      fi
+      return
+    fi
+  fi
+  printf "%s" "$url"
+}
 
 BACKEND_IMAGE="$(backend_image)"
 FRONTEND_IMAGE="$(frontend_image)"
@@ -25,36 +46,46 @@ FRONTEND_IMAGE="$(frontend_image)"
 echo "=== Sync Source Code & Build Images ==="
 
 # 1. Sync & Build Backend
+REPO_URL_BE=$(apply_git_token "$BACKEND_REPO")
 if [ ! -d "$BACKEND_PATH" ]; then
-  echo "--> Folder Backend tidak ada. Melakukan clone dari $BACKEND_REPO..."
-  git clone -b "$BACKEND_BRANCH" "$BACKEND_REPO" "$BACKEND_PATH"
+  echo "--> Folder Backend tidak ada. Melakukan clone..."
+  git clone -b "$BACKEND_BRANCH" "$REPO_URL_BE" "$BACKEND_PATH" || { echo "Gagal clone backend"; exit 1; }
 else
   echo "--> Folder Backend ditemukan. Melakukan update (git pull)..."
-  cd "$BACKEND_PATH" && git pull origin "$BACKEND_BRANCH" && cd -
+  (cd "$BACKEND_PATH" && git remote set-url origin "$REPO_URL_BE" && git pull origin "$BACKEND_BRANCH") || echo "Peringatan: Gagal pull backend, mencoba lanjut build..."
 fi
 
 if [ -d "$BACKEND_PATH" ]; then
-  echo "--> Building Backend Image: $BACKEND_IMAGE..."
-  docker build -t "$BACKEND_IMAGE" "$BACKEND_PATH"
-  echo "OK: Backend built."
+  if [ -f "$BACKEND_PATH/Dockerfile" ]; then
+    echo "--> Building Backend Image: $BACKEND_IMAGE..."
+    docker build -t "$BACKEND_IMAGE" "$BACKEND_PATH"
+    echo "OK: Backend built."
+  else
+    echo "Kesalahan: Dockerfile tidak ditemukan di $BACKEND_PATH"
+  fi
 fi
 
 # 2. Sync & Build Frontend
+REPO_URL_FE=$(apply_git_token "$FRONTEND_REPO")
 if [ ! -d "$FRONTEND_PATH" ]; then
-  echo "--> Folder Frontend tidak ada. Melakukan clone dari $FRONTEND_REPO..."
-  git clone -b "$FRONTEND_BRANCH" "$FRONTEND_REPO" "$FRONTEND_PATH"
+  echo "--> Folder Frontend tidak ada. Melakukan clone..."
+  git clone -b "$FRONTEND_BRANCH" "$REPO_URL_FE" "$FRONTEND_PATH" || { echo "Gagal clone frontend"; exit 1; }
 else
   echo "--> Folder Frontend ditemukan. Melakukan update (git pull)..."
-  cd "$FRONTEND_PATH" && git pull origin "$FRONTEND_BRANCH" && cd -
+  (cd "$FRONTEND_PATH" && git remote set-url origin "$REPO_URL_FE" && git pull origin "$FRONTEND_BRANCH") || echo "Peringatan: Gagal pull frontend, mencoba lanjut build..."
 fi
 
 if [ -d "$FRONTEND_PATH" ]; then
-  echo "--> Building Frontend Image: $FRONTEND_IMAGE..."
-  VITE_API_BASE_URL="${PUBLIC_APP_URL:-http://localhost:3001}/api"
-  docker build \
-    --build-arg VITE_API_BASE_URL="$VITE_API_BASE_URL" \
-    -t "$FRONTEND_IMAGE" "$FRONTEND_PATH"
-  echo "OK: Frontend built."
+  if [ -f "$FRONTEND_PATH/Dockerfile" ]; then
+    echo "--> Building Frontend Image: $FRONTEND_IMAGE..."
+    VITE_API_BASE_URL="${PUBLIC_APP_URL:-http://localhost:3001}/api"
+    docker build \
+      --build-arg VITE_API_BASE_URL="$VITE_API_BASE_URL" \
+      -t "$FRONTEND_IMAGE" "$FRONTEND_PATH"
+    echo "OK: Frontend built."
+  else
+    echo "Kesalahan: Dockerfile tidak ditemukan di $FRONTEND_PATH"
+  fi
 fi
 
 echo "=== Build Complete ==="
