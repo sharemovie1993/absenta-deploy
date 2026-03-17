@@ -28,9 +28,11 @@ REPL_INFRA="${K8S_REPL_INFRA:-1}"
 
 DATABASE_URL="${DATABASE_URL:-}"
 REDIS_URL="${REDIS_URL:-}"
+JWT_SECRET="${JWT_SECRET:-}"
 
 [ -n "$DATABASE_URL" ] || { echo "DATABASE_URL is empty (set in ../env/env.database or /etc/absenta/k8s.env)"; exit 1; }
 [ -n "$REDIS_URL" ] || { echo "REDIS_URL is empty (set in ../env/env.redis or /etc/absenta/k8s.env)"; exit 1; }
+[ -n "$JWT_SECRET" ] || { echo "JWT_SECRET is empty (set in ../env/env.common)"; exit 1; }
 
 b64() { printf '%s' "$1" | base64 | tr -d '\n'; }
 
@@ -58,6 +60,7 @@ type: Opaque
 data:
   DATABASE_URL: $(b64 "$DATABASE_URL")
   REDIS_URL: $(b64 "$REDIS_URL")
+  JWT_SECRET: $(b64 "$JWT_SECRET")
 YAML
 
 MAIN_DOMAIN="${MAIN_DOMAIN:-}"
