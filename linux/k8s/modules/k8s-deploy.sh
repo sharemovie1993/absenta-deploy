@@ -15,7 +15,7 @@ NS="$(ns_name)"
 OUT="$(bash "$DIR/k8s-render.sh")"
 
 echo "Applying manifests to namespace=$NS"
-$K apply -R -f "$OUT_DIR"
+$K apply -R -f "$OUT"
 
 echo "--> Menunggu pod menyala (Live Status)..."
 # Jalankan status monitor di background selama rollout
