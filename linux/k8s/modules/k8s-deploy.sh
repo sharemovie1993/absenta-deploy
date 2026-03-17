@@ -20,18 +20,39 @@ $K apply -R -f "$OUT"
 echo "--> Menunggu pod menyala (Live Status)..."
 # Jalankan status monitor di background selama rollout
 (
-  while true; do
+  ITERATION=0
+  MAX_ITERATION=20 # Sekitar 60 detik (20 * 3s)
+  while [ $ITERATION -lt $MAX_ITERATION ]; do
     echo "--- [Status Pod @ $(date +%H:%M:%S)] ---"
-    $K -n "$NS" get pods --no-headers | grep -v "Completed" | head -n 5
+    POD_STATUS=$($K -n "$NS" get pods --no-headers | grep -v "Completed")
+    echo "$POD_STATUS" | head -n 10
+    
+    # Cek jika ada CrashLoopBackOff yang parah
+    if echo "$POD_STATUS" | grep -q "CrashLoopBackOff"; then
+       echo "   [!] Terdeteksi CrashLoopBackOff. Memeriksa log..."
+       break
+    fi
+
+    # Cek jika sudah Running semua
+    if ! echo "$POD_STATUS" | grep -qvE "Running|Terminating"; then
+       echo "   [OK] Semua Pod sudah Running."
+       break
+    fi
+
     sleep 3
+    ITERATION=$((ITERATION+1))
   done
 ) &
 MONITOR_PID=$!
 
-# Tunggu rollout selesai
-$K -n "$NS" rollout status deploy/backend-api --timeout=180s || {
-  echo "Peringatan: Rollout timeout. Menampilkan log error terakhir:"
-  $K -n "$NS" logs deploy/backend-api --tail=20
+# Tunggu rollout selesai (ini akan memblokir sampai sukses atau timeout)
+$K -n "$NS" rollout status deploy/backend-api --timeout=120s || {
+  echo ""
+  echo "!!! DEPLOY GAGAL ATAU TIMEOUT !!!"
+  echo "Menampilkan penyebab error terakhir:"
+  $K -n "$NS" get pods
+  echo "--- Log Backend API ---"
+  $K -n "$NS" logs deploy/backend-api --tail=30
 }
 
 # Matikan monitor background
