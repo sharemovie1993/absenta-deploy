@@ -9,7 +9,7 @@
 ## Struktur
 - `linux/docker-compose.linux.yml` (Redis internal + API + workers)
 - `linux/docker-compose.linux.external-redis.yml` (tanpa Redis service)
-- `linux/deploy-multinode.sh` (script deploy idempotent)
+- `linux/deploylinux.sh` (script deploy idempotent)
 
 ## Konfigurasi ENV
 Edit berkas di `../env/`:
@@ -24,8 +24,8 @@ Jalankan dari server VPS:
 
 ```bash
 cd absenta-deploy/linux
-chmod +x deploy-multinode.sh
-./deploy-multinode.sh
+chmod +x deploylinux.sh
+./deploylinux.sh
 ```
 
 ## Tanpa input username GitHub (non-interaktif)
@@ -36,21 +36,21 @@ Jika repo backend private, pilih salah satu:
 - **Paling mudah (disarankan): jalankan deploy, lalu masukkan token saat diminta (input disembunyikan)**:
 
 ```bash
-./deploy-multinode.sh
+./deploylinux.sh
 ```
 
 - **Pakai PAT (paling mudah)**:
 
 ```bash
 export GITHUB_TOKEN="ghp_xxx"
-./deploy-multinode.sh
+./deploylinux.sh
 ```
 
 Jika token fine-grained Anda tetap ditolak, coba set username GitHub juga:
 
 ```bash
 export GITHUB_USERNAME="USERNAME_GITHUB_ANDA"
-./deploy-multinode.sh
+./deploylinux.sh
 ```
 
 - **Paling mudah (tanpa export, simpan sekali di folder env deploy)**:
@@ -60,14 +60,14 @@ cd absenta-deploy
 printf "GITHUB_USERNAME=x-access-token\nGITHUB_TOKEN=ghp_xxx\n" > env/.env.tokengit
 chmod 600 env/.env.tokengit
 cd linux
-./deploy-multinode.sh
+./deploylinux.sh
 ```
 
 - **Pakai SSH deploy key (lebih aman untuk server)**:
   - Set `BACKEND_REPO` ke SSH:
 
 ```bash
-BACKEND_REPO="git@github.com:sharemovie1993/absenta_backend.git" ./deploy-multinode.sh
+BACKEND_REPO="git@github.com:sharemovie1993/absenta_backend.git" ./deploylinux.sh
 ```
 
   - Pastikan key sudah ada di VPS (misal `/root/.ssh/id_ed25519`) dan public key ditambahkan sebagai Deploy Key di repo.
@@ -76,11 +76,11 @@ BACKEND_REPO="git@github.com:sharemovie1993/absenta_backend.git" ./deploy-multin
 
 ```bash
 cd absenta-deploy/linux
-COMPOSE_FILE="$PWD/docker-compose.linux.external-redis.yml" ./deploy-multinode.sh
+COMPOSE_FILE="$PWD/docker-compose.linux.external-redis.yml" ./deploylinux.sh
 ```
 
 ## Menu deploy (1 klik)
-Saat menjalankan `deploy-multinode.sh`, Anda akan diminta memilih:
+Saat menjalankan `deploylinux.sh`, Anda akan diminta memilih:
 - **Single instance**: nginx + postgresql + redis + api + workers di 1 mesin
 - **Multi instance**: postgresql external + redis external, api + workers di mesin ini
 
@@ -129,7 +129,7 @@ Default script akan:
 Untuk menentukan lokasi sendiri:
 
 ```bash
-BACKEND_PATH=/opt/absenta/absenta_backend ./deploy-multinode.sh
+BACKEND_PATH=/opt/absenta/absenta_backend ./deploylinux.sh
 ```
 
 ## Migrate DB (Prisma)
@@ -139,7 +139,7 @@ Default `deploy-multinode.sh` menjalankan migrate otomatis via container Node:
 Untuk mematikan migrate:
 
 ```bash
-RUN_MIGRATE=false ./deploy-multinode.sh
+RUN_MIGRATE=false ./deploylinux.sh
 ```
 
 ## Health check
