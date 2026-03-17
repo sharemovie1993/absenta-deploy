@@ -19,6 +19,7 @@ ensure_tools() {
 run_install_k3s() { echo "--> Memulai instalasi/update k3s..."; bash "$DIR/modules/k3s-install.sh"; }
 run_build() { echo "--> Memulai build images (backend/frontend)..."; bash "$DIR/modules/k8s-build.sh"; }
 run_deploy() { echo "--> Memulai deploy/update Absenta ke k3s..."; bash "$DIR/modules/k8s-deploy.sh"; }
+run_migrate() { echo "--> Menjalankan database migration & seed..."; bash "$DIR/modules/k8s-migrate.sh"; }
 run_status() { echo "--> Memeriksa status pods/svc..."; bash "$DIR/modules/k8s-status.sh"; }
 run_logs() { echo "--> Menampilkan log backend-api..."; bash "$DIR/modules/k8s-logs.sh"; }
 run_restart() { echo "--> Melakukan restart layanan (rollout)..."; bash "$DIR/modules/k8s-restart.sh"; }
@@ -59,28 +60,30 @@ while true; do
   echo "1) Install/Update k3s"
   echo "2) Build Images (Backend & Frontend)"
   echo "3) Deploy/Update Absenta ke k3s (NodePort)"
-  echo "4) Status (pods/svc)"
-  echo "5) Logs (backend-api)"
-  echo "6) Restart (Rolling update semua pod)"
-  echo "7) Runbook (baca panduan dari menu)"
-  echo "8) Uninstall Absenta (hapus namespace)"
-  echo "9) Uninstall k3s (hapus cluster di node ini)"
-  echo "10) Ke Menu Toolbox (Infra/DB/Safe)"
-  echo "11) Ke Menu Lama (Legacy / Deploy Old)"
+  echo "4) Migration & Seed (Database setup)"
+  echo "5) Status (pods/svc)"
+  echo "6) Logs (backend-api)"
+  echo "7) Restart (Rolling update semua pod)"
+  echo "8) Runbook (baca panduan dari menu)"
+  echo "9) Uninstall Absenta (hapus namespace)"
+  echo "10) Uninstall k3s (hapus cluster di node ini)"
+  echo "11) Ke Menu Toolbox (Infra/DB/Safe)"
+  echo "12) Ke Menu Lama (Legacy / Deploy Old)"
   echo "0) Keluar"
   read -rp "Pilih: " opt
   case "${opt:-}" in
     1) run_install_k3s ;;
     2) run_build ;;
     3) run_deploy ;;
-    4) run_status ;;
-    5) run_logs ;;
-    6) run_restart ;;
-    7) run_runbook ;;
-    8) run_uninstall_app ;;
-    9) run_uninstall_k3s ;;
-    10) run_toolbox_menu ;;
-    11) run_old_menu ;;
+    4) run_migrate ;;
+    5) run_status ;;
+    6) run_logs ;;
+    7) run_restart ;;
+    8) run_runbook ;;
+    9) run_uninstall_app ;;
+    10) run_uninstall_k3s ;;
+    11) run_toolbox_menu ;;
+    12) run_old_menu ;;
     0) exit 0 ;;
     *) echo "Pilihan tidak dikenal" ;;
   esac
