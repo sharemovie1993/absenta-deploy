@@ -60,6 +60,9 @@ if [ -d "$BACKEND_PATH" ]; then
     echo "--> Building Backend Image: $BACKEND_IMAGE..."
     docker build -t "$BACKEND_IMAGE" "$BACKEND_PATH"
     echo "OK: Backend built."
+    echo "--> Importing Backend image to K3s..."
+    docker save "$BACKEND_IMAGE" | as_root k3s ctr images import -
+    echo "OK: Backend imported to K3s."
   else
     echo "Kesalahan: Dockerfile tidak ditemukan di $BACKEND_PATH"
   fi
@@ -83,6 +86,9 @@ if [ -d "$FRONTEND_PATH" ]; then
       --build-arg VITE_API_BASE_URL="$VITE_API_BASE_URL" \
       -t "$FRONTEND_IMAGE" "$FRONTEND_PATH"
     echo "OK: Frontend built."
+    echo "--> Importing Frontend image to K3s..."
+    docker save "$FRONTEND_IMAGE" | as_root k3s ctr images import -
+    echo "OK: Frontend imported to K3s."
   else
     echo "Kesalahan: Dockerfile tidak ditemukan di $FRONTEND_PATH"
   fi
