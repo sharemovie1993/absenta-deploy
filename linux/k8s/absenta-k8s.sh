@@ -15,13 +15,13 @@ ensure_tools() {
   need_cmd uname
 }
 
-run_install_k3s() { bash "$DIR/modules/k3s-install.sh"; }
-run_deploy() { bash "$DIR/modules/k8s-deploy.sh"; }
-run_status() { bash "$DIR/modules/k8s-status.sh"; }
-run_logs() { bash "$DIR/modules/k8s-logs.sh"; }
-run_uninstall_app() { bash "$DIR/modules/k8s-uninstall-app.sh"; }
-run_uninstall_k3s() { bash "$DIR/modules/k3s-uninstall.sh"; }
-run_runbook() { bash "$DIR/modules/runbook.sh"; }
+run_install_k3s() { echo "--> Memulai instalasi/update k3s..."; bash "$DIR/modules/k3s-install.sh"; }
+run_deploy() { echo "--> Memulai deploy/update Absenta ke k3s..."; bash "$DIR/modules/k8s-deploy.sh"; }
+run_status() { echo "--> Memeriksa status pods/svc..."; bash "$DIR/modules/k8s-status.sh"; }
+run_logs() { echo "--> Menampilkan log backend-api..."; bash "$DIR/modules/k8s-logs.sh"; }
+run_uninstall_app() { echo "--> Memulai uninstall Absenta (hapus namespace)..."; bash "$DIR/modules/k8s-uninstall-app.sh"; }
+run_uninstall_k3s() { echo "--> Memulai uninstall k3s (hapus cluster)..."; bash "$DIR/modules/k3s-uninstall.sh"; }
+run_runbook() { echo "--> Membuka menu runbook..."; bash "$DIR/modules/runbook.sh"; }
 
 ensure_tools
 

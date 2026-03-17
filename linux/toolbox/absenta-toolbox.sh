@@ -14,18 +14,18 @@ ensure_tools() {
 
 ensure_tools
 
-run_status() { bash "$DIR/modules/status.sh"; }
-run_firewall_menu() { bash "$DIR/modules/firewall-menu.sh"; }
-run_hardening() { bash "$DIR/modules/hardening-basic.sh"; }
-run_wireguard_menu() { bash "$DIR/modules/wireguard-menu.sh"; }
-run_postgres_menu() { bash "$DIR/modules/postgres-menu.sh"; }
-run_redis_menu() { bash "$DIR/modules/redis-menu.sh"; }
-run_ssh_menu() { bash "$DIR/modules/ssh-menu.sh"; }
-run_network_menu() { bash "$DIR/modules/network-menu.sh"; }
-run_time_sync() { bash "$DIR/modules/time-sync.sh"; }
-run_role_wizard() { bash "$DIR/modules/role-wizard.sh"; }
-run_monitoring_menu() { bash "$DIR/modules/monitoring-menu.sh"; }
-run_runbook_menu() { bash "$DIR/modules/runbook-menu.sh"; }
+run_status() { echo "--> Memeriksa status server..."; bash "$DIR/modules/status.sh"; }
+run_firewall_menu() { echo "--> Membuka menu firewall..."; bash "$DIR/modules/firewall-menu.sh"; }
+run_hardening() { echo "--> Menjalankan hardening basic..."; bash "$DIR/modules/hardening-basic.sh"; }
+run_wireguard_menu() { echo "--> Membuka menu WireGuard..."; bash "$DIR/modules/wireguard-menu.sh"; }
+run_postgres_menu() { echo "--> Membuka menu PostgreSQL..."; bash "$DIR/modules/postgres-menu.sh"; }
+run_redis_menu() { echo "--> Membuka menu Redis..."; bash "$DIR/modules/redis-menu.sh"; }
+run_ssh_menu() { echo "--> Membuka menu SSH..."; bash "$DIR/modules/ssh-menu.sh"; }
+run_network_menu() { echo "--> Membuka menu Network..."; bash "$DIR/modules/network-menu.sh"; }
+run_time_sync() { echo "--> Melakukan sinkronisasi waktu..."; bash "$DIR/modules/time-sync.sh"; }
+run_role_wizard() { echo "--> Membuka role wizard..."; bash "$DIR/modules/role-wizard.sh"; }
+run_monitoring_menu() { echo "--> Membuka menu monitoring..."; bash "$DIR/modules/monitoring-menu.sh"; }
+run_runbook_menu() { echo "--> Membuka menu runbook..."; bash "$DIR/modules/runbook-menu.sh"; }
 
 if [ ! -t 0 ] || [ ! -t 1 ]; then
   run_status
