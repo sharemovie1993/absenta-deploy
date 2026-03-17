@@ -21,6 +21,7 @@ run_build() { echo "--> Memulai build images (backend/frontend)..."; bash "$DIR/
 run_deploy() { echo "--> Memulai deploy/update Absenta ke k3s..."; bash "$DIR/modules/k8s-deploy.sh"; }
 run_status() { echo "--> Memeriksa status pods/svc..."; bash "$DIR/modules/k8s-status.sh"; }
 run_logs() { echo "--> Menampilkan log backend-api..."; bash "$DIR/modules/k8s-logs.sh"; }
+run_restart() { echo "--> Melakukan restart layanan (rollout)..."; bash "$DIR/modules/k8s-restart.sh"; }
 run_uninstall_app() { echo "--> Memulai uninstall Absenta (hapus namespace)..."; bash "$DIR/modules/k8s-uninstall-app.sh"; }
 run_uninstall_k3s() { echo "--> Memulai uninstall k3s (hapus cluster)..."; bash "$DIR/modules/k3s-uninstall.sh"; }
 run_runbook() { echo "--> Membuka menu runbook..."; bash "$DIR/modules/runbook.sh"; }
@@ -60,11 +61,12 @@ while true; do
   echo "3) Deploy/Update Absenta ke k3s (NodePort)"
   echo "4) Status (pods/svc)"
   echo "5) Logs (backend-api)"
-  echo "6) Runbook (baca panduan dari menu)"
-  echo "7) Uninstall Absenta (hapus namespace)"
-  echo "8) Uninstall k3s (hapus cluster di node ini)"
-  echo "9) Ke Menu Toolbox (Infra/DB/Safe)"
-  echo "10) Ke Menu Lama (Legacy / Deploy Old)"
+  echo "6) Restart (Rolling update semua pod)"
+  echo "7) Runbook (baca panduan dari menu)"
+  echo "8) Uninstall Absenta (hapus namespace)"
+  echo "9) Uninstall k3s (hapus cluster di node ini)"
+  echo "10) Ke Menu Toolbox (Infra/DB/Safe)"
+  echo "11) Ke Menu Lama (Legacy / Deploy Old)"
   echo "0) Keluar"
   read -rp "Pilih: " opt
   case "${opt:-}" in
@@ -73,11 +75,12 @@ while true; do
     3) run_deploy ;;
     4) run_status ;;
     5) run_logs ;;
-    6) run_runbook ;;
-    7) run_uninstall_app ;;
-    8) run_uninstall_k3s ;;
-    9) run_toolbox_menu ;;
-    10) run_old_menu ;;
+    6) run_restart ;;
+    7) run_runbook ;;
+    8) run_uninstall_app ;;
+    9) run_uninstall_k3s ;;
+    10) run_toolbox_menu ;;
+    11) run_old_menu ;;
     0) exit 0 ;;
     *) echo "Pilihan tidak dikenal" ;;
   esac
