@@ -81,7 +81,21 @@ echo "--> Memeriksa status akhir job..."
 if $K -n "$NS" get job "$name" -o jsonpath='{.status.succeeded}' | grep -q "1"; then
   echo "[OK] $name berhasil diselesaikan."
 else
-  echo "[!] $name GAGAL. Silakan cek detail di atas."
+  echo "[!] $name GAGAL."
+  # Deteksi error P3009 dari log pod
+  if $K -n "$NS" logs "$POD_NAME" 2>/dev/null | grep -q "P3009"; then
+    FAILED_MIGRATION=$($K -n "$NS" logs "$POD_NAME" | grep -oP 'The \K[a-zA-Z0-9_]+(?= migration started)' | head -n1 || echo "")
+    if [ -n "$FAILED_MIGRATION" ]; then
+      echo "    [DETEKSI] Ditemukan migrasi yang gagal sebelumnya: $FAILED_MIGRATION"
+      read -rp "    [?] Apakah Bapak ingin saya melakukan 'migrate resolve' untuk mengabaikan status gagal ini? (y/n) [n]: " resolve_ans
+      if [ "${resolve_ans,,}" = "y" ]; then
+        echo "    --> Mencoba melakukan resolve pada migrasi: $FAILED_MIGRATION"
+        run_job "prisma-resolve-job" "npx prisma migrate resolve --applied $FAILED_MIGRATION"
+        echo "    --> Selesai. Silakan jalankan kembali Menu 5 untuk melanjutkan migrasi utama."
+        exit 0
+      fi
+    fi
+  fi
   exit 1
 fi
   
