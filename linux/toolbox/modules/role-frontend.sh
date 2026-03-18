@@ -10,8 +10,9 @@ echo "Skrip ini akan mengatur firewall agar server bisa diakses oleh Reverse Pro
 apt_ensure ufw
 
 # Ambil konfigurasi port (default 32000 untuk k3s frontend)
-load_env_files
-NP="${K8S_FRONTEND_NODEPORT:-32000}"
+# Karena skrip ini di toolbox, kita load env dengan cara toolbox
+# load_env_files biasanya ada di k8s common, untuk toolbox kita cukup ambil nilai default
+NP="32000"
 
 as_root ufw default deny incoming
 as_root ufw default allow outgoing
