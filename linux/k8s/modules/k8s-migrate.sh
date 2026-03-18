@@ -35,7 +35,7 @@ spec:
       - name: job
         image: $IMAGE
         imagePullPolicy: IfNotPresent
-        command: ["sh", "-c", "$cmd"]
+        command: ["sh", "-c", "echo 'DEBUG: Current Dir:' && pwd && echo 'DEBUG: Prisma Files:' && ls -R prisma && $cmd"]
         envFrom:
         - secretRef:
             name: absenta-secrets
