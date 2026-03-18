@@ -34,7 +34,15 @@ if ! ip -4 addr show | grep -qw "$WG_IP"; then
   exit 1
 fi
 
-echo "IP yang dipilih: $WG_IP"
+# Mencari nama interface dari IP yang dipilih
+WG_IFACE=$(ip -4 addr show | grep -B1 "$WG_IP" | head -n1 | awk '{print $2}' | tr -d ':')
+
+if [ -z "$WG_IFACE" ]; then
+  echo "[!] GAGAL: Tidak bisa mendeteksi nama interface untuk IP $WG_IP"
+  exit 1
+fi
+
+echo "Interface yang terdeteksi: $WG_IFACE"
 CONFIG_FILE="/etc/rancher/k3s/config.yaml"
 BACKUP_FILE="${CONFIG_FILE}.bak"
 
@@ -44,9 +52,11 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 
 echo "Memperbarui konfigurasi di $CONFIG_FILE..."
+# Kita tambahkan flannel-iface agar routing internal K3s menggunakan interface yang benar
 cat <<EOF | as_root tee "$CONFIG_FILE" > /dev/null
 node-ip: "$WG_IP"
 bind-address: "$WG_IP"
+flannel-iface: "$WG_IFACE"
 disable:
   - traefik
 EOF
@@ -85,6 +95,15 @@ fi
 
 # Cek apakah sudah listening
 echo "Verifikasi Listening Ports (NodePort):"
-as_root ss -tulpn | grep -E '32001|32080' || echo "   [!] Port belum muncul di 'ss -tulpn'. Mungkin manifest belum di-apply atau ada kendala lain."
+if as_root ss -tulpn | grep -E '32001|32080'; then
+  echo "[OK] Port sudah terbuka di host."
+else
+  echo "   [!] Port belum muncul di 'ss -tulpn'. Mencoba cek via iptables..."
+  if as_root iptables -t nat -L -n | grep -E '32001|32080'; then
+     echo "   [OK] Port ditemukan di aturan iptables (redirection aktif)."
+  else
+     echo "   [!] Port benar-benar belum terbuka. Silakan tunggu 1-2 menit agar K3s sinkron."
+  fi
+fi
 
 echo "Perbaikan Selesai."
