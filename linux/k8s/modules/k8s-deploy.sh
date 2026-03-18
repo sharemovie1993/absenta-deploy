@@ -74,6 +74,7 @@ for port in 32001 32080; do
     echo "[WARN] Port $port is NOT listening on host. This may cause 502 Bad Gateway."
     if [ -n "$WG_IP" ]; then
       echo "   [!] Mencoba memperbaiki konfigurasi networking K3s secara otomatis..."
+      # Jalankan fix-network secara langsung
       bash "$DIR/k8s-fix-network.sh"
     fi
   fi

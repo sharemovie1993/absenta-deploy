@@ -27,15 +27,22 @@ if [ -z "$WG_IP" ]; then
   exit 1
 fi
 
+# Validasi IP apakah benar-benar ada di interface sistem
+if ! ip addr show | grep -q "$WG_IP"; then
+  echo "[!] GAGAL: IP $WG_IP tidak ditemukan di interface manapun di server ini!"
+  exit 1
+fi
+
 echo "IP yang dipilih: $WG_IP"
 CONFIG_FILE="/etc/rancher/k3s/config.yaml"
+BACKUP_FILE="${CONFIG_FILE}.bak"
 
-# Pastikan folder config ada
-as_root mkdir -p "$(dirname "$CONFIG_FILE")"
+# Backup config lama jika ada
+if [ -f "$CONFIG_FILE" ]; then
+  as_root cp "$CONFIG_FILE" "$BACKUP_FILE"
+fi
 
-# Update atau buat config.yaml
-# Kita gunakan node-ip dan bind-address agar K3s hanya bicara lewat WireGuard untuk API dan NodePort
-# Ini akan mengatasi masalah port tidak listening di interface yang benar.
+echo "Memperbarui konfigurasi di $CONFIG_FILE..."
 cat <<EOF | as_root tee "$CONFIG_FILE" > /dev/null
 node-ip: "$WG_IP"
 bind-address: "$WG_IP"
@@ -43,15 +50,40 @@ disable:
   - traefik
 EOF
 
-echo "Konfigurasi $CONFIG_FILE telah diperbarui."
-echo "Merestart K3s untuk menerapkan perubahan..."
-as_root systemctl restart k3s
+echo "Merestart K3s (dengan timeout 30 detik)..."
+# Gunakan --no-block agar tidak stuck jika service macet saat stop
+as_root systemctl restart k3s --no-block || true
 
-echo "Menunggu K3s aktif kembali (10 detik)..."
-sleep 10
+echo "Menunggu K3s aktif kembali..."
+ITER=0
+MAX_ITER=15 # 30 detik total (15 * 2s)
+SUCCESS=false
+
+while [ $ITER -lt $MAX_ITER ]; do
+  if as_root systemctl is-active k3s >/dev/null 2>&1; then
+    echo "[OK] K3s sudah Aktif (Running)."
+    SUCCESS=true
+    break
+  fi
+  echo "   ... Menunggu ($((ITER+1))/$MAX_ITER)"
+  sleep 2
+  ITER=$((ITER+1))
+done
+
+if [ "$SUCCESS" = "false" ]; then
+  echo "[!] K3s gagal start tepat waktu. Menampilkan log 20 baris terakhir:"
+  as_root journalctl -u k3s --no-pager -n 20
+  echo ""
+  echo "Mencoba mengembalikan konfigurasi lama..."
+  if [ -f "$BACKUP_FILE" ]; then
+    as_root mv "$BACKUP_FILE" "$CONFIG_FILE"
+    as_root systemctl restart k3s --no-block
+  fi
+  exit 1
+fi
 
 # Cek apakah sudah listening
-echo "Status Listening Ports (NodePort):"
-as_root ss -tulpn | grep -E '32001|32080' || echo "Port belum muncul, mungkin manifest belum di-apply."
+echo "Verifikasi Listening Ports (NodePort):"
+as_root ss -tulpn | grep -E '32001|32080' || echo "   [!] Port belum muncul di 'ss -tulpn'. Mungkin manifest belum di-apply atau ada kendala lain."
 
-echo "Done. Silakan jalankan menu Deploy kembali jika port belum muncul."
+echo "Perbaikan Selesai."
