@@ -6,15 +6,28 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "=== Memperbaiki Konfigurasi Networking K3s ==="
 
-WG_INTERFACE="${WG_INTERFACE:-wg0}"
-WG_IP=$(ip -4 addr show "$WG_INTERFACE" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "")
+# List all interfaces and their IPs
+echo "Daftar Interface dan IP yang tersedia di server ini:"
+IP_LIST=$(ip -4 -o addr show | awk '{print $2 " -> " $4}' | cut -d'/' -f1)
+echo "$IP_LIST"
+echo "-----------------------------------------------"
+
+# Try to find wg0 default IP
+WG_DEFAULT=$(ip -4 addr show wg0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1 || echo "")
+
+if [ -n "$WG_DEFAULT" ]; then
+  read -rp "Pilih IP untuk K3s NodePort (Default wg0: $WG_DEFAULT): " WG_IP
+  WG_IP="${WG_IP:-$WG_DEFAULT}"
+else
+  read -rp "Pilih IP untuk K3s NodePort: " WG_IP
+fi
 
 if [ -z "$WG_IP" ]; then
-  echo "[!] GAGAL: Interface $WG_INTERFACE tidak ditemukan. Tidak bisa memperbaiki binding."
+  echo "[!] GAGAL: IP tidak boleh kosong."
   exit 1
 fi
 
-echo "Ditemukan IP WireGuard: $WG_IP"
+echo "IP yang dipilih: $WG_IP"
 CONFIG_FILE="/etc/rancher/k3s/config.yaml"
 
 # Pastikan folder config ada

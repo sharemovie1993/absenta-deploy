@@ -20,17 +20,33 @@ K3S_DISABLE_TRAEFIK="${K3S_DISABLE_TRAEFIK:-false}"
 INSTALL_ARGS=()
 INSTALL_ARGS+=("INSTALL_K3S_CHANNEL=$K3S_CHANNEL")
 
-# Detect WireGuard IP (e.g., 10.60.0.1)
-WG_INTERFACE="${WG_INTERFACE:-wg0}"
-WG_IP=$(ip -4 addr show "$WG_INTERFACE" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "")
-
-if [ -n "$WG_IP" ]; then
-  echo "Detected WireGuard IP: $WG_IP on $WG_INTERFACE"
-  # Use WireGuard IP as node-ip and bind-address to ensure accessibility
-  K3S_EXEC="--node-ip $WG_IP --bind-address $WG_IP"
+# Interactive IP Selection if possible
+K3S_EXEC=""
+if [ -t 0 ]; then
+  echo "=== Pilih IP untuk K3s Networking ==="
+  echo "Daftar Interface dan IP yang tersedia:"
+  ip -4 -o addr show | awk '{print $2 " -> " $4}' | cut -d'/' -f1
+  echo "-----------------------------------------------"
+  
+  WG_DEFAULT=$(ip -4 addr show wg0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1 || echo "")
+  
+  if [ -n "$WG_DEFAULT" ]; then
+    read -rp "IP untuk NodePort (Default wg0: $WG_DEFAULT): " WG_IP
+    WG_IP="${WG_IP:-$WG_DEFAULT}"
+  else
+    read -rp "IP untuk NodePort: " WG_IP
+  fi
+  
+  if [ -n "$WG_IP" ]; then
+    echo "Using IP: $WG_IP"
+    K3S_EXEC="--node-ip $WG_IP --bind-address $WG_IP"
+  fi
 else
-  echo "WireGuard interface $WG_INTERFACE not found, using default interface"
-  K3S_EXEC=""
+  # Non-interactive fallback (keep old logic but make it optional)
+  WG_IP=$(ip -4 addr show wg0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1 || echo "")
+  if [ -n "$WG_IP" ]; then
+    K3S_EXEC="--node-ip $WG_IP --bind-address $WG_IP"
+  fi
 fi
 
 if [ "${K3S_DISABLE_TRAEFIK,,}" = "true" ]; then

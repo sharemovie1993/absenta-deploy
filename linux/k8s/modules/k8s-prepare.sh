@@ -65,15 +65,15 @@ else
   ERR_COUNT=$((ERR_COUNT+1))
 fi
 
-# 5. Cek Interface WireGuard (Penting untuk Binding K3s)
-echo "--> 5. Memeriksa Interface WireGuard..."
-WG_INTERFACE="${WG_INTERFACE:-wg0}"
-WG_IP=$(ip -4 addr show "$WG_INTERFACE" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "")
+# 5. Cek Interface Networking (Binding K3s)
+echo "--> 5. Memeriksa Interface & IP yang tersedia..."
+IP_LIST=$(ip -4 -o addr show | awk '{print $2 " -> " $4}' | cut -d'/' -f1)
+echo "$IP_LIST"
+WG_IP=$(ip -4 addr show wg0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1 || echo "")
 if [ -n "$WG_IP" ]; then
-  echo "   OK: Ditemukan IP $WG_IP pada interface $WG_INTERFACE"
+  echo "   INFO: Ditemukan IP $WG_IP pada interface wg0. Ini direkomendasikan untuk K3s."
 else
-  echo "   [!] PERINGATAN: Interface $WG_INTERFACE tidak ditemukan! K3s mungkin tidak bisa diakses dari Reverse Proxy via WireGuard."
-  ERR_COUNT=$((ERR_COUNT+1))
+  echo "   [!] PERINGATAN: Interface wg0 tidak ditemukan! Pastikan Bapak memilih IP yang benar saat Install/Fix Network."
 fi
 
 echo ""
