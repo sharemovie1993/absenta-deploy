@@ -101,10 +101,10 @@ fi
 # Cek apakah sudah listening
 echo "Verifikasi Listening Ports (NodePort):"
 if as_root ss -tulpn | grep -E '32001|32080'; then
-  echo "[OK] Port sudah terbuka di host."
+  echo "[OK] Port sudah terbuka di host (socket active)."
 else
   echo "   [!] Port belum muncul di 'ss -tulpn'. Mencoba cek via iptables..."
-  if as_root iptables -t nat -L -n | grep -E '32001|32080'; then
+  if as_root iptables -t nat -L -n | grep -E "dpt:32001|dpt:32080|:32001|:32080"; then
      echo "   [OK] Port ditemukan di aturan iptables (redirection aktif)."
   else
      echo "   [!] Port benar-benar belum terbuka. Silakan tunggu 1-2 menit agar K3s sinkron."

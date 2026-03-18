@@ -14,6 +14,27 @@ NS="$(ns_name)"
 
 OUT="$(bash "$DIR/k8s-render.sh")"
 
+# Pre-flight Check: Pastikan image sudah ada di K3s ctr
+echo "--> Memeriksa ketersediaan image di K3s..."
+IMG_BE=$(backend_image)
+IMG_FE=$(frontend_image)
+CTR_LIST=$(as_root k3s ctr images ls | awk '{print $1}')
+
+if ! echo "$CTR_LIST" | grep -qw "$IMG_BE"; then
+  echo "[!] PERINGATAN: Image Backend ($IMG_BE) belum ada di K3s!"
+  echo "    Silakan jalankan Menu 3 (Build Images) terlebih dahulu."
+  exit 1
+fi
+
+if ! echo "$CTR_LIST" | grep -qw "$IMG_FE"; then
+  echo "[!] PERINGATAN: Image Frontend ($IMG_FE) belum ada di K3s!"
+  echo "    Deployment Frontend mungkin akan mengalami ErrImagePull."
+  read -rp "    Tetap lanjut deploy? (y/n) [n]: " cont_deploy
+  if [ "${cont_deploy,,}" != "y" ]; then
+    exit 1
+  fi
+fi
+
 echo "Applying manifests to namespace=$NS"
 $K apply -R -f "$OUT"
 
@@ -67,15 +88,12 @@ echo "=== Verifikasi Networking K3s ==="
 $K -n "$NS" get pods
 $K -n "$NS" get svc
 
-# Detect WireGuard IP (e.g., 10.60.0.1)
-WG_INTERFACE="${WG_INTERFACE:-wg0}"
-WG_IP=$(ip -4 addr show "$WG_INTERFACE" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "")
-
-echo "Checking if NodePorts are listening on host..."
+echo "Checking if NodePorts are active on host..."
 FIX_RUN=false
 for port in 32001 32080; do
   # Cek via ss (socket status) ATAU via iptables (K8s NAT rules)
-  if as_root ss -tulpn | grep -q ":$port " || as_root iptables -t nat -L -n | grep -q ":$port"; then
+  # Di iptables -n, port muncul sebagai dpt:32001
+  if as_root ss -tulpn | grep -q ":$port " || as_root iptables -t nat -L -n | grep -qE "dpt:$port|:$port"; then
     echo "[OK] Port $port is active (ss/iptables)."
   else
     echo "[WARN] Port $port is NOT detected in networking rules."
