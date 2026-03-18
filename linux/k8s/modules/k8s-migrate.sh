@@ -45,18 +45,24 @@ EOF
 
 echo "--> Streaming log dari $name (Real-time)..."
 echo "-----------------------------------------------"
-# Tunggu pod sampai muncul (Running atau Succeeded/Failed)
-# Kita gunakan kubectl wait agar lebih stabil sebelum logs -f
-$K -n "$NS" wait --for=condition=Ready pod -l "job-name=$name" --timeout=15s >/dev/null 2>&1 || true
+# Tunggu pod sampai benar-benar menyala (Running/Succeeded/Failed)
+echo "--> Menunggu pod migrasi menyala..."
+$K -n "$NS" wait --for=condition=Ready pod -l "job-name=$name" --timeout=60s >/dev/null 2>&1 || true
 
-# Ambil nama pod secara spesifik untuk logging yang lebih akurat
+# Ambil nama pod secara spesifik
 POD_NAME=$($K -n "$NS" get pods -l "job-name=$name" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 
 if [ -n "$POD_NAME" ]; then
-  $K -n "$NS" logs -f "$POD_NAME" || echo "[!] Gagal mengambil log (Job mungkin sudah selesai)"
+  echo "--> Mengambil log dari pod: $POD_NAME"
+  # Gunakan logs -f tapi beri sedikit jeda agar kontainer benar-benar start
+  sleep 1
+  $K -n "$NS" logs -f "$POD_NAME" || {
+    echo "[!] Streaming terputus, mengambil log statis..."
+    $K -n "$NS" logs "$POD_NAME"
+  }
 else
-  echo "[!] Pod untuk job $name tidak ditemukan. Mencoba logs via job..."
-  $K -n "$NS" logs job/"$name" || echo "[!] Gagal mengambil log dari job."
+  echo "[!] Pod tidak ditemukan, menampilkan log Job..."
+  $K -n "$NS" logs job/"$name"
 fi
 echo "-----------------------------------------------"
 
