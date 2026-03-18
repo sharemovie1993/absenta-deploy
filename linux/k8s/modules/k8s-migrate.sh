@@ -106,7 +106,29 @@ fi
   $K -n "$NS" delete job "$name" >/dev/null 2>&1
 }
 
+# 1. Main Migration Job
 run_job "prisma-migrate-job" "npx prisma migrate deploy"
+
+# 2. Check for P3009 Error and Auto-Resolve
+if [ $? -ne 0 ]; then
+  echo "--> Mendeteksi kegagalan migrasi. Memeriksa detail error..."
+  # Ambil nama pod terakhir
+  LAST_POD=$($K -n "$NS" get pods -l "job-name=prisma-migrate-job" --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null || echo "")
+  
+  if [ -n "$LAST_POD" ] && $K -n "$NS" logs "$LAST_POD" 2>/dev/null | grep -q "P3009"; then
+    FAILED_MIG=$( $K -n "$NS" logs "$LAST_POD" | grep -oP 'The \K[a-zA-Z0-9_]+(?= migration started)' | head -n1 || echo "" )
+    if [ -n "$FAILED_MIG" ]; then
+      echo "    [!] Terdeteksi Error P3009 pada migrasi: $FAILED_MIG"
+      echo "    --> Menjalankan 'prisma migrate resolve' secara otomatis untuk membersihkan status..."
+      run_job "prisma-resolve-job" "npx prisma migrate resolve --applied $FAILED_MIG"
+      
+      echo "    --> Status dibersihkan. Mencoba kembali migrasi utama..."
+      run_job "prisma-migrate-job-retry" "npx prisma migrate deploy"
+    fi
+  fi
+fi
+
+# 3. Seed Job
 run_job "prisma-seed-job" "npm run seed"
 
 echo "=== Done ==="
