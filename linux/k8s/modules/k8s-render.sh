@@ -139,7 +139,7 @@ spec:
           image: ${BACKEND_IMAGE}
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 3001
+            - containerPort: 3000
           env:
             - name: NODE_NAME
               value: "node-api"
@@ -161,7 +161,7 @@ spec:
   ports:
     - name: http
       port: 3001
-      targetPort: 3001
+      targetPort: 3000
       protocol: TCP
       nodePort: ${BACKEND_NODEPORT}
 YAML
