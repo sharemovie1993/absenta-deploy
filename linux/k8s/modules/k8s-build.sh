@@ -15,20 +15,28 @@ FRONTEND_REPO="${FRONTEND_REPO:-https://github.com/sharemovie1993/absenta_fronte
 BACKEND_BRANCH="${BACKEND_BRANCH:-master}"
 FRONTEND_BRANCH="${FRONTEND_BRANCH:-master}"
 
-# Jalur lokal
-BACKEND_PATH="${BACKEND_PATH:-$DIR/../../../absenta_backend}"
-FRONTEND_PATH="${FRONTEND_PATH:-$DIR/../../../absenta_frontend}"
+# Jalur lokal (Pastikan path relatif benar dari script ini)
+# Jika script di linux/k8s/modules, maka ../../../ naik 3 level ke root absenta-deploy
+BACKEND_PATH="${BACKEND_PATH:-$(cd "$DIR/../../.." && pwd)/absenta_backend}"
+FRONTEND_PATH="${FRONTEND_PATH:-$(cd "$DIR/../../.." && pwd)/absenta_frontend}"
 
 # Fungsi helper untuk menambahkan token ke URL HTTPS jika ada
 apply_git_token() {
   local url="$1"
   local user="${GITHUB_USERNAME:-}"
   local token="${GITHUB_TOKEN:-}"
+  
+  # Debug: Cek apakah token terbaca (Hapus setelah berhasil)
+  # echo "DEBUG: Token length is ${#token}"
+  
   if [ -n "$token" ]; then
     # Jika URL diawali https://, sisipkan user:token@
     if [[ "$url" == https://* ]]; then
       local proto="https://"
       local rest="${url#https://}"
+      # Hapus username lama dari URL jika ada (misal sharemovie1993@)
+      rest="${rest#*@}"
+      
       if [ -n "$user" ]; then
         printf "https://%s:%s@%s" "$user" "$token" "$rest"
       else
