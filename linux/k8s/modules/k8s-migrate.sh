@@ -47,17 +47,28 @@ echo "--> Streaming log dari $name (Real-time)..."
 echo "-----------------------------------------------"
 # Tunggu pod sampai benar-benar menyala (Running/Succeeded/Failed)
 echo "--> Menunggu pod migrasi menyala..."
-$K -n "$NS" wait --for=condition=Ready pod -l "job-name=$name" --timeout=60s >/dev/null 2>&1 || true
+# Tambahkan loop untuk memastikan pod sudah bukan ContainerCreating lagi
+for i in {1..20}; do
+  PHASE=$($K -n "$NS" get pods -l "job-name=$name" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+  REASON=$($K -n "$NS" get pods -l "job-name=$name" -o jsonpath='{.items[0].status.containerStatuses[0].state.waiting.reason}' 2>/dev/null || echo "")
+  
+  if [ "$PHASE" = "Running" ] || [ "$PHASE" = "Succeeded" ] || [ "$PHASE" = "Failed" ]; then
+    break
+  fi
+  
+  echo "    ... Status: $PHASE ($REASON) - Menunggu kontainer siap ($i/20)"
+  sleep 3
+done
 
 # Ambil nama pod secara spesifik
 POD_NAME=$($K -n "$NS" get pods -l "job-name=$name" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 
 if [ -n "$POD_NAME" ]; then
   echo "--> Mengambil log dari pod: $POD_NAME"
-  # Gunakan logs -f tapi beri sedikit jeda agar kontainer benar-benar start
-  sleep 1
+  # Cek sekali lagi apakah sudah bisa ditarik lognya
   $K -n "$NS" logs -f "$POD_NAME" || {
     echo "[!] Streaming terputus, mengambil log statis..."
+    sleep 2
     $K -n "$NS" logs "$POD_NAME"
   }
 else
