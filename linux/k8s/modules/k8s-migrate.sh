@@ -18,11 +18,9 @@ run_job() {
   local cmd="$2"
   
   echo "--> Menjalankan $name..."
-  
-  # Hapus job lama jika ada
-  $K -n "$NS" delete job "$name" --ignore-not-found >/dev/null 2>&1
+$K -n "$NS" delete job "$name" >/dev/null 2>&1 || true
 
-  cat <<EOF | $K apply -f -
+cat <<EOF | $K apply -f -
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -35,7 +33,7 @@ spec:
       - name: job
         image: $IMAGE
         imagePullPolicy: IfNotPresent
-        command: ["sh", "-c", "echo 'DEBUG: Current Dir:' && pwd && echo 'DEBUG: Prisma Files:' && ls -R prisma && $cmd"]
+        command: ["sh", "-c", "$cmd"]
         envFrom:
         - secretRef:
             name: absenta-secrets
@@ -45,12 +43,20 @@ spec:
   backoffLimit: 0
 EOF
 
-  echo "--> Menunggu $name selesai..."
-  $K -n "$NS" wait --for=condition=complete job/"$name" --timeout=300s || {
-    echo "Kesalahan: $name gagal atau timeout."
-    $K -n "$NS" logs job/"$name"
-    exit 1
-  }
+echo "--> Streaming log dari $name (Real-time)..."
+echo "-----------------------------------------------"
+# Tunggu pod muncul sebentar lalu stream log
+sleep 2
+$K -n "$NS" logs -f "job-name=$name" --all-containers=true || echo "[!] Gagal mengambil log (Job mungkin sudah selesai sangat cepat)"
+echo "-----------------------------------------------"
+
+echo "--> Memeriksa status akhir job..."
+if $K -n "$NS" get job "$name" -o jsonpath='{.status.succeeded}' | grep -q "1"; then
+  echo "[OK] $name berhasil diselesaikan."
+else
+  echo "[!] $name GAGAL. Silakan cek detail di atas."
+  exit 1
+fi
   
   echo "--> Log dari $name:"
   $K -n "$NS" logs job/"$name"
