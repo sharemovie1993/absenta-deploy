@@ -11,27 +11,27 @@ DB_USER="absenta_user"
 
 echo "--> Memberikan izin penuh untuk user '$DB_USER' pada database '$DB_NAME'..."
 
-# PostgreSQL 15+ (v17/18) butuh izin eksplisit pada SCHEMA public
 as_root sudo -u postgres psql -d "$DB_NAME" <<EOF
--- Jadikan user pemilik database (agar punya hak CREATE)
+-- 1. Berikan hak Superuser sementara agar migrasi lancar
+ALTER USER $DB_USER WITH SUPERUSER;
+
+-- 2. Bersihkan catatan migrasi yang gagal (P3009 FIX)
+DELETE FROM "_prisma_migrations" WHERE migration_name = '20260308081750_add_invoice_public_token';
+DROP TABLE IF EXISTS "InvoicePublicToken" CASCADE;
+
+-- 3. Jadikan user pemilik database dan skema
 ALTER DATABASE "$DB_NAME" OWNER TO $DB_USER;
-
--- Berikan izin pada skema public
-GRANT ALL ON SCHEMA public TO $DB_USER;
 ALTER SCHEMA public OWNER TO $DB_USER;
+GRANT ALL ON SCHEMA public TO $DB_USER;
+GRANT CREATE ON SCHEMA public TO $DB_USER;
 
--- Izin pada objek yang sudah ada
+-- 4. Izin pada objek yang sudah ada & masa depan
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO $DB_USER;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO $DB_USER;
-GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO $DB_USER;
-
--- Izin otomatis untuk objek di masa depan
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $DB_USER;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO $DB_USER;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO $DB_USER;
-
--- Tambahan: Izin eksplisit untuk CREATE di skema public
-GRANT CREATE ON SCHEMA public TO $DB_USER;
 EOF
+
+echo "OK: Database telah dibersihkan dari migrasi gagal dan izin ditingkatkan."
 
 echo "OK: Izin database telah diperbarui."
