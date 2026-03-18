@@ -91,9 +91,8 @@ $K -n "$NS" get svc
 echo "Checking if NodePorts are active on host..."
 FIX_RUN=false
 for port in 32001 32080; do
-  # Cek via ss (socket status) ATAU via iptables (K8s NAT rules)
-  # Di iptables -n, port muncul sebagai dpt:32001
-  if as_root ss -tulpn | grep -q ":$port " || as_root iptables -t nat -L -n | grep -qE "dpt:$port|:$port"; then
+  # Cek via ss (socket status) ATAU via iptables-save (lebih akurat untuk grep)
+  if as_root ss -tulpn | grep -q ":$port " || as_root iptables-save | grep -qE "dpt:$port|--dport $port"; then
     echo "[OK] Port $port is active (ss/iptables)."
   else
     echo "[WARN] Port $port is NOT detected in networking rules."

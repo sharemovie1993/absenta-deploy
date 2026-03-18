@@ -49,14 +49,18 @@ echo "=== Sync Source Code & Build Images ==="
 REPO_URL_BE=$(apply_git_token "$BACKEND_REPO")
 if [ ! -d "$BACKEND_PATH" ]; then
   echo "--> Folder Backend tidak ada. Melakukan clone..."
-  git clone -b "$BACKEND_BRANCH" "$REPO_URL_BE" "$BACKEND_PATH" || { echo "Gagal clone backend"; exit 1; }
+  git clone -b "$BACKEND_BRANCH" "$REPO_URL_BE" "$BACKEND_PATH" || { 
+    echo "[!] GAGAL: Tidak bisa clone backend. Pastikan GITHUB_TOKEN sudah diset di env/env.common!"
+    exit 1 
+  }
 else
   echo "--> Folder Backend ditemukan. Melakukan update (git pull)..."
-  (cd "$BACKEND_PATH" && git remote set-url origin "$REPO_URL_BE" && git pull origin "$BACKEND_BRANCH") || echo "Peringatan: Gagal pull backend, mencoba lanjut build..."
+  (cd "$BACKEND_PATH" && git remote set-url origin "$REPO_URL_BE" && git pull origin "$BACKEND_BRANCH") || {
+    echo "[!] PERINGATAN: Gagal pull backend (mungkin masalah token). Mencoba lanjut build dengan file yang ada..."
+  }
 fi
 
-if [ -d "$BACKEND_PATH" ]; then
-  if [ -f "$BACKEND_PATH/Dockerfile" ]; then
+if [ -d "$BACKEND_PATH" ] && [ -f "$BACKEND_PATH/Dockerfile" ]; then
     echo "--> Building Backend Image: $BACKEND_IMAGE..."
     docker build -t "$BACKEND_IMAGE" "$BACKEND_PATH"
     echo "OK: Backend built."
@@ -68,23 +72,26 @@ if [ -d "$BACKEND_PATH" ]; then
       docker save "$BACKEND_IMAGE" | as_root k3s ctr images import -
     fi
     echo "OK: Backend imported to K3s."
-  else
-    echo "Kesalahan: Dockerfile tidak ditemukan di $BACKEND_PATH"
-  fi
+else
+    echo "[!] KESALAHAN: Folder atau Dockerfile Backend tidak ditemukan di: $BACKEND_PATH"
 fi
 
 # 2. Sync & Build Frontend
 REPO_URL_FE=$(apply_git_token "$FRONTEND_REPO")
 if [ ! -d "$FRONTEND_PATH" ]; then
   echo "--> Folder Frontend tidak ada. Melakukan clone..."
-  git clone -b "$FRONTEND_BRANCH" "$REPO_URL_FE" "$FRONTEND_PATH" || { echo "Gagal clone frontend"; exit 1; }
+  git clone -b "$FRONTEND_BRANCH" "$REPO_URL_FE" "$FRONTEND_PATH" || { 
+    echo "[!] GAGAL: Tidak bisa clone frontend. Pastikan GITHUB_TOKEN sudah diset di env/env.common!"
+    exit 1 
+  }
 else
   echo "--> Folder Frontend ditemukan. Melakukan update (git pull)..."
-  (cd "$FRONTEND_PATH" && git remote set-url origin "$REPO_URL_FE" && git pull origin "$FRONTEND_BRANCH") || echo "Peringatan: Gagal pull frontend, mencoba lanjut build..."
+  (cd "$FRONTEND_PATH" && git remote set-url origin "$REPO_URL_FE" && git pull origin "$FRONTEND_BRANCH") || {
+    echo "[!] PERINGATAN: Gagal pull frontend (mungkin masalah token). Mencoba lanjut build dengan file yang ada..."
+  }
 fi
 
-if [ -d "$FRONTEND_PATH" ]; then
-  if [ -f "$FRONTEND_PATH/Dockerfile" ]; then
+if [ -d "$FRONTEND_PATH" ] && [ -f "$FRONTEND_PATH/Dockerfile" ]; then
     echo "--> Building Frontend Image: $FRONTEND_IMAGE..."
     VITE_API_BASE_URL="${PUBLIC_APP_URL:-http://localhost:3001}/api"
     docker build \
@@ -100,9 +107,8 @@ if [ -d "$FRONTEND_PATH" ]; then
       docker save "$FRONTEND_IMAGE" | as_root k3s ctr images import -
     fi
     echo "OK: Frontend imported to K3s."
-  else
-    echo "Kesalahan: Dockerfile tidak ditemukan di $FRONTEND_PATH"
-  fi
+else
+    echo "[!] KESALAHAN: Folder atau Dockerfile Frontend tidak ditemukan di: $FRONTEND_PATH"
 fi
 
 echo "=== Build Complete ==="

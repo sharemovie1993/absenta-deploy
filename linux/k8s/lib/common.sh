@@ -38,6 +38,7 @@ load_env_files() {
   [ -f "$(state_file)" ] && . "$(state_file)" || true
   [ -f "$base/../env/env.common" ] && . "$base/../env/env.common" || true
   [ -f "$base/../env/env.production" ] && . "$base/../env/env.production" || true
+  [ -f "$base/../env/.env.tokengit" ] && . "$base/../env/.env.tokengit" || true
   [ -f "$base/../env/env.database" ] && . "$base/../env/env.database" || true
   [ -f "$base/../env/env.redis" ] && . "$base/../env/env.redis" || true
   [ -f "$base/../env/env.payment" ] && . "$base/../env/env.payment" || true
