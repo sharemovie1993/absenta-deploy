@@ -34,6 +34,7 @@ spec:
       containers:
       - name: job
         image: $IMAGE
+        imagePullPolicy: IfNotPresent
         command: ["sh", "-c", "$cmd"]
         envFrom:
         - secretRef:

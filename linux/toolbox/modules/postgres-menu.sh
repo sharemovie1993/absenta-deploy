@@ -10,6 +10,7 @@ run_config_wg() { bash "$DIR/postgres-config-wireguard.sh"; }
 run_create_db_user() { bash "$DIR/postgres-create-db-user.sh"; }
 run_backup() { bash "$DIR/postgres-backup.sh"; }
 run_restore() { bash "$DIR/postgres-restore.sh"; }
+run_fix_perms() { bash "$DIR/postgres-fix-permissions.sh"; }
 
 while true; do
   echo ""
@@ -20,7 +21,8 @@ while true; do
   echo "4) Create database + user (grant privileges)"
   echo "5) Backup database (pg_dump)"
   echo "6) Restore database (psql < dump)"
-  echo "0) Back"
+  echo "7) Fix Permissions (Grant All to absenta_user)"
+  echo "0) Kembali"
   read -rp "Pilih: " opt
   case "${opt:-}" in
     1) run_install ;;
@@ -29,6 +31,7 @@ while true; do
     4) run_create_db_user ;;
     5) run_backup ;;
     6) run_restore ;;
+    7) run_fix_perms ;;
     0) exit 0 ;;
     *) echo "Pilihan tidak dikenal" ;;
   esac
