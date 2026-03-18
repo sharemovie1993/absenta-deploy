@@ -74,10 +74,11 @@ WG_IP=$(ip -4 addr show "$WG_INTERFACE" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\
 echo "Checking if NodePorts are listening on host..."
 FIX_RUN=false
 for port in 32001 32080; do
-  if as_root ss -tulpn | grep -q ":$port "; then
-    echo "[OK] Port $port is listening on host."
+  # Cek via ss (socket status) ATAU via iptables (K8s NAT rules)
+  if as_root ss -tulpn | grep -q ":$port " || as_root iptables -t nat -L -n | grep -q ":$port"; then
+    echo "[OK] Port $port is active (ss/iptables)."
   else
-    echo "[WARN] Port $port is NOT listening on host."
+    echo "[WARN] Port $port is NOT detected in networking rules."
     if [ "$FIX_RUN" = "false" ]; then
       echo "   [!] Mencoba memperbaiki konfigurasi networking K3s secara otomatis..."
       bash "$DIR/k8s-fix-network.sh"

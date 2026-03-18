@@ -37,6 +37,11 @@ fi
 # Mencari nama interface dari IP yang dipilih
 WG_IFACE=$(ip -4 addr show | grep -B1 "$WG_IP" | head -n1 | awk '{print $2}' | tr -d ':')
 
+# Jika tidak ketemu via grep -B1, coba cari via ip route get
+if [ -z "$WG_IFACE" ]; then
+  WG_IFACE=$(ip -4 route get "$WG_IP" 2>/dev/null | awk '{print $3; exit}')
+fi
+
 if [ -z "$WG_IFACE" ]; then
   echo "[!] GAGAL: Tidak bisa mendeteksi nama interface untuk IP $WG_IP"
   exit 1

@@ -79,10 +79,10 @@ ns_name() {
 }
 
 backend_image() {
-  printf 'docker.io/library/%s' "${ABSENTA_BACKEND_IMAGE:-absenta-backend:latest}"
+  printf '%s' "${ABSENTA_BACKEND_IMAGE:-absenta-backend:latest}"
 }
 
 frontend_image() {
-  printf 'docker.io/library/%s' "${ABSENTA_FRONTEND_IMAGE:-absenta-frontend:latest}"
+  printf '%s' "${ABSENTA_FRONTEND_IMAGE:-absenta-frontend:latest}"
 }
 

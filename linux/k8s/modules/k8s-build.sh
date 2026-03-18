@@ -61,6 +61,7 @@ if [ -d "$BACKEND_PATH" ]; then
     docker build -t "$BACKEND_IMAGE" "$BACKEND_PATH"
     echo "OK: Backend built."
     echo "--> Importing Backend image to K3s (Mohon tunggu, ini memakan waktu)..."
+    as_root k3s ctr images remove "$BACKEND_IMAGE" >/dev/null 2>&1 || true
     if is_cmd pv; then
       docker save "$BACKEND_IMAGE" | pv | as_root k3s ctr images import -
     else
@@ -91,8 +92,8 @@ if [ -d "$FRONTEND_PATH" ]; then
       -t "$FRONTEND_IMAGE" "$FRONTEND_PATH"
     echo "OK: Frontend built."
     echo "--> Importing Frontend image to K3s (Mohon tunggu, ini memakan waktu)..."
-    # Pastikan image di-tag dengan nama yang lengkap agar K3s tidak bingung (docker.io/library/...)
-    as_root k3s ctr images remove "docker.io/library/$FRONTEND_IMAGE" >/dev/null 2>&1 || true
+    # Hapus image lama agar tidak conflict
+    as_root k3s ctr images remove "$FRONTEND_IMAGE" >/dev/null 2>&1 || true
     if is_cmd pv; then
       docker save "$FRONTEND_IMAGE" | pv | as_root k3s ctr images import -
     else
