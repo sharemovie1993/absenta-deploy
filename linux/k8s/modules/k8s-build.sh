@@ -15,10 +15,13 @@ FRONTEND_REPO="${FRONTEND_REPO:-https://github.com/sharemovie1993/absenta_fronte
 BACKEND_BRANCH="${BACKEND_BRANCH:-master}"
 FRONTEND_BRANCH="${FRONTEND_BRANCH:-master}"
 
-# Jalur lokal (Pastikan path relatif benar dari script ini)
-# Jika script di linux/k8s/modules, maka ../../../ naik 3 level ke root absenta-deploy
-BACKEND_PATH="${BACKEND_PATH:-$(cd "$DIR/../../.." && pwd)/absenta_backend}"
-FRONTEND_PATH="${FRONTEND_PATH:-$(cd "$DIR/../../.." && pwd)/absenta_frontend}"
+# Jalur lokal (Dinamis berdasarkan lokasi script ini)
+# DIR adalah folder modules, .. adalah k8s, ../.. adalah linux, ../../.. adalah root absenta-deploy
+BASE_PATH="$(cd "$DIR/../../.." && pwd)"
+BACKEND_PATH="${BACKEND_PATH:-$BASE_PATH/absenta_backend}"
+FRONTEND_PATH="${FRONTEND_PATH:-$BASE_PATH/absenta_frontend}"
+
+echo "--> Base Path terdeteksi: $BASE_PATH"
 
 # Fungsi helper untuk menambahkan token ke URL HTTPS jika ada
 apply_git_token() {
