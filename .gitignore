@@ -1,6 +1,12 @@
-# Ignore environment files (keep examples)
-!env/*.example
+# Ignore environment files
+env/*.common
+env/*.production
+env/*.database
+env/*.email
+env/*.payment
+env/*.redis
 env/.env.tokengit
+!env/*.example
 
 # OS junk
 .DS_Store
