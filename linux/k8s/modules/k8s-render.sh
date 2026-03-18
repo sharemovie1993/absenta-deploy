@@ -192,7 +192,7 @@ spec:
           image: ${FRONTEND_IMAGE}
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 80
+            - containerPort: 8080
 ---
 apiVersion: v1
 kind: Service
@@ -206,7 +206,7 @@ spec:
   ports:
     - name: http
       port: 80
-      targetPort: 80
+      targetPort: 8080
       protocol: TCP
       nodePort: ${FRONTEND_NODEPORT}
 YAML
