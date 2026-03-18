@@ -11,6 +11,7 @@ load_env_files
 require_kubectl
 
 NAMESPACE="$(ns_name)"
+
 BACKEND_IMAGE="$(backend_image)"
 FRONTEND_IMAGE="$(frontend_image)"
 
