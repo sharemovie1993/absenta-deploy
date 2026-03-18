@@ -78,10 +78,20 @@ fi
 echo "-----------------------------------------------"
 
 echo "--> Memeriksa status akhir job..."
-if $K -n "$NS" get job "$name" -o jsonpath='{.status.succeeded}' | grep -q "1"; then
-  echo "[OK] $name berhasil diselesaikan."
-else
-  echo "[!] $name GAGAL."
+# Tunggu sebentar agar Kubernetes mengupdate status job
+SUCCESS=false
+for j in {1..5}; do
+  if $K -n "$NS" get job "$name" -o jsonpath='{.status.succeeded}' 2>/dev/null | grep -q "1"; then
+    echo "[OK] $name berhasil diselesaikan."
+    SUCCESS=true
+    break
+  fi
+  sleep 2
+done
+
+if [ "$SUCCESS" = "false" ]; then
+  echo "[!] $name GAGAL atau status belum terupdate."
+  # ... rest of the error detection ...
   # Deteksi error P3009 dari log pod
   if $K -n "$NS" logs "$POD_NAME" 2>/dev/null | grep -q "P3009"; then
     FAILED_MIGRATION=$($K -n "$NS" logs "$POD_NAME" | grep -oP 'The \K[a-zA-Z0-9_]+(?= migration started)' | head -n1 || echo "")
