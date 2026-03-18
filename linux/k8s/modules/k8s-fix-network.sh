@@ -27,9 +27,10 @@ if [ -z "$WG_IP" ]; then
   exit 1
 fi
 
-# Validasi IP apakah benar-benar ada di interface sistem
-if ! ip addr show | grep -q "$WG_IP"; then
+# Validasi IP apakah benar-benar ada di interface sistem (Pencocokan Presisi)
+if ! ip -4 addr show | grep -qw "$WG_IP"; then
   echo "[!] GAGAL: IP $WG_IP tidak ditemukan di interface manapun di server ini!"
+  echo "Pastikan Bapak mengetik IP dengan benar tanpa spasi."
   exit 1
 fi
 
