@@ -92,7 +92,7 @@ REPO_URL_FE=$(apply_git_token "$FRONTEND_REPO")
 if [ ! -d "$FRONTEND_PATH" ]; then
   echo "--> Folder Frontend tidak ada. Melakukan clone..."
   git clone -b "$FRONTEND_BRANCH" "$REPO_URL_FE" "$FRONTEND_PATH" || { 
-    echo "[!] GAGAL: Tidak bisa clone frontend. Pastikan GITHUB_TOKEN sudah diset di env/env.common!"
+    echo "[!] GAGAL: Tidak bisa clone frontend. Pastikan GITHUB_TOKEN sudah diset!"
     exit 1 
   }
 else
@@ -100,6 +100,21 @@ else
   (cd "$FRONTEND_PATH" && git remote set-url origin "$REPO_URL_FE" && git pull origin "$FRONTEND_BRANCH") || {
     echo "[!] PERINGATAN: Gagal pull frontend (mungkin masalah token). Mencoba lanjut build dengan file yang ada..."
   }
+fi
+
+# PERBAIKAN: Jika Dockerfile tidak ada di folder hasil clone, ambil dari folder template linux/frontend
+if [ -d "$FRONTEND_PATH" ]; then
+    if [ ! -f "$FRONTEND_PATH/Dockerfile" ]; then
+        echo "--> [INFO] Dockerfile tidak ditemukan di $FRONTEND_PATH."
+        echo "--> [FIX] Menyalin Dockerfile template dari $BASE_PATH/linux/frontend/Dockerfile..."
+        if [ -f "$BASE_PATH/linux/frontend/Dockerfile" ]; then
+            cp "$BASE_PATH/linux/frontend/Dockerfile" "$FRONTEND_PATH/Dockerfile"
+            echo "--> [OK] Dockerfile berhasil disalin."
+        else
+            echo "[!] KESALAHAN KRITIS: Template Dockerfile tidak ditemukan di $BASE_PATH/linux/frontend/Dockerfile"
+            exit 1
+        fi
+    fi
 fi
 
 if [ -d "$FRONTEND_PATH" ] && [ -f "$FRONTEND_PATH/Dockerfile" ]; then
@@ -119,7 +134,7 @@ if [ -d "$FRONTEND_PATH" ] && [ -f "$FRONTEND_PATH/Dockerfile" ]; then
     fi
     echo "OK: Frontend imported to K3s."
 else
-    echo "[!] KESALAHAN: Folder atau Dockerfile Frontend tidak ditemukan di: $FRONTEND_PATH"
+    echo "[!] KESALAHAN: Folder atau Dockerfile Frontend tetap tidak ditemukan di: $FRONTEND_PATH"
 fi
 
 echo "=== Build Complete ==="
