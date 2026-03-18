@@ -20,6 +20,10 @@ run_install_k3s() { echo "--> Memulai instalasi/update k3s..."; bash "$DIR/modul
 run_prepare() { echo "--> Melakukan pengecekan pre-deploy..."; bash "$DIR/modules/k8s-prepare.sh"; }
 run_build() { echo "--> Memulai build images (backend/frontend)..."; bash "$DIR/modules/k8s-build.sh"; }
 run_deploy() { echo "--> Memulai deploy/update Absenta ke k3s..."; bash "$DIR/modules/k8s-deploy.sh"; }
+run_build_and_deploy() {
+  echo "=== ONE-CLICK UPDATE: BUILD & DEPLOY ==="
+  run_build && run_deploy
+}
 run_migrate() { echo "--> Menjalankan database migration & seed..."; bash "$DIR/modules/k8s-migrate.sh"; }
 run_status() { echo "--> Memeriksa status pods/svc..."; bash "$DIR/modules/k8s-status.sh"; }
 run_logs() { echo "--> Menampilkan log backend-api..."; bash "$DIR/modules/k8s-logs.sh"; }
@@ -73,6 +77,7 @@ while true; do
   echo "12) Fix Networking (NodePort Binding)"
   echo "13) Ke Menu Toolbox (Infra/DB/Safe)"
   echo "14) Ke Menu Lama (Legacy / Deploy Old)"
+  echo "15) Build & Deploy (One-Click Update)"
   echo "0) Keluar"
   read -rp "Pilih: " opt
   case "${opt:-}" in
@@ -90,6 +95,7 @@ while true; do
     12) run_fix_network ;;
     13) run_toolbox_menu ;;
     14) run_old_menu ;;
+    15) run_build_and_deploy ;;
     0) exit 0 ;;
     *) echo "Pilihan tidak dikenal" ;;
   esac
