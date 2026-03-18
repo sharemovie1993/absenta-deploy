@@ -17,6 +17,11 @@ OUT="$(bash "$DIR/k8s-render.sh")"
 echo "Applying manifests to namespace=$NS"
 $K apply -R -f "$OUT"
 
+# Bersihkan pod yang stuck ImagePullBackOff atau Error agar tidak mengganggu monitoring
+echo "--> Membersihkan pod yang stuck (ImagePullBackOff/Error)..."
+$K -n "$NS" delete pods --field-selector=status.phase=Failed >/dev/null 2>&1 || true
+$K -n "$NS" get pods --no-headers | grep -E "ImagePullBackOff|ErrImagePull" | awk '{print $1}' | xargs -r $K -n "$NS" delete pod >/dev/null 2>&1 || true
+
 echo "--> Menunggu pod menyala (Live Status)..."
 # Jalankan status monitor di background selama rollout
 (

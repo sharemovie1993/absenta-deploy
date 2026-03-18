@@ -128,6 +128,8 @@ spec:
       app: backend-api
   template:
     metadata:
+      annotations:
+        absenta.deploy/timestamp: "${TS:-$(date +%s)}"
       labels:
         app: backend-api
     spec:
@@ -164,6 +166,8 @@ spec:
 YAML
 
 if [ "${DEPLOY_FRONTEND,,}" = "true" ]; then
+  # Tambahkan timestamp ke annotation agar pod selalu di-refresh (mencegah ImagePullBackOff pod lama)
+  TS=$(date +%s)
   cat > "$OUT_DIR/11-frontend.yaml" <<YAML
 apiVersion: apps/v1
 kind: Deployment
@@ -177,6 +181,8 @@ spec:
       app: frontend
   template:
     metadata:
+      annotations:
+        absenta.deploy/timestamp: "${TS}"
       labels:
         app: frontend
     spec:
