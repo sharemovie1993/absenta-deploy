@@ -11,7 +11,7 @@ DB_USER="absenta_user"
 
 echo "--> Memberikan izin penuh untuk user '$DB_USER' pada database '$DB_NAME'..."
 
-as_root -u postgres psql -d "$DB_NAME" <<EOF
+as_root sudo -u postgres psql -d "$DB_NAME" <<EOF
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO $DB_USER;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO $DB_USER;
 GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO $DB_USER;
