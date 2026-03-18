@@ -65,6 +65,17 @@ else
   ERR_COUNT=$((ERR_COUNT+1))
 fi
 
+# 5. Cek Interface WireGuard (Penting untuk Binding K3s)
+echo "--> 5. Memeriksa Interface WireGuard..."
+WG_INTERFACE="${WG_INTERFACE:-wg0}"
+WG_IP=$(ip -4 addr show "$WG_INTERFACE" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "")
+if [ -n "$WG_IP" ]; then
+  echo "   OK: Ditemukan IP $WG_IP pada interface $WG_INTERFACE"
+else
+  echo "   [!] PERINGATAN: Interface $WG_INTERFACE tidak ditemukan! K3s mungkin tidak bisa diakses dari Reverse Proxy via WireGuard."
+  ERR_COUNT=$((ERR_COUNT+1))
+fi
+
 echo ""
 echo "=== HASIL PENGECEKAN ==="
 if [ $ERR_COUNT -eq 0 ]; then

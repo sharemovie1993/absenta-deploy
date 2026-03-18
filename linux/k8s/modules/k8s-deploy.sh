@@ -58,7 +58,26 @@ $K -n "$NS" rollout status deploy/backend-api --timeout=120s || {
 # Matikan monitor background
 kill $MONITOR_PID 2>/dev/null || true
 
+echo "=== Verifikasi Networking K3s ==="
 $K -n "$NS" get pods
 $K -n "$NS" get svc
+
+# Detect WireGuard IP (e.g., 10.60.0.1)
+WG_INTERFACE="${WG_INTERFACE:-wg0}"
+WG_IP=$(ip -4 addr show "$WG_INTERFACE" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "")
+
+echo "Checking if NodePorts are listening on host..."
+for port in 32001 32080; do
+  if as_root ss -tulpn | grep -q ":$port "; then
+    echo "[OK] Port $port is listening on host."
+  else
+    echo "[WARN] Port $port is NOT listening on host. This may cause 502 Bad Gateway."
+    if [ -n "$WG_IP" ]; then
+      echo "   [!] Mencoba memperbaiki konfigurasi networking K3s secara otomatis..."
+      bash "$DIR/k8s-fix-network.sh"
+    fi
+  fi
+done
+
 echo "Done"
 

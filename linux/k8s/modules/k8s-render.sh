@@ -14,7 +14,12 @@ NAMESPACE="$(ns_name)"
 BACKEND_IMAGE="$(backend_image)"
 FRONTEND_IMAGE="$(frontend_image)"
 
-DEPLOY_FRONTEND="${K8S_DEPLOY_FRONTEND:-false}"
+# Jika frontend image sudah pernah di-build/import, default ke true
+if as_root k3s ctr images ls | grep -q "$FRONTEND_IMAGE"; then
+  DEPLOY_FRONTEND="${K8S_DEPLOY_FRONTEND:-true}"
+else
+  DEPLOY_FRONTEND="${K8S_DEPLOY_FRONTEND:-false}"
+fi
 BACKEND_NODEPORT="${K8S_BACKEND_NODEPORT:-32001}"
 FRONTEND_NODEPORT="${K8S_FRONTEND_NODEPORT:-32080}"
 
@@ -154,6 +159,7 @@ spec:
     - name: http
       port: 3001
       targetPort: 3001
+      protocol: TCP
       nodePort: ${BACKEND_NODEPORT}
 YAML
 
@@ -179,7 +185,7 @@ spec:
           image: ${FRONTEND_IMAGE}
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 8080
+            - containerPort: 80
 ---
 apiVersion: v1
 kind: Service
@@ -192,8 +198,9 @@ spec:
     app: frontend
   ports:
     - name: http
-      port: 8080
-      targetPort: 8080
+      port: 80
+      targetPort: 80
+      protocol: TCP
       nodePort: ${FRONTEND_NODEPORT}
 YAML
 fi

@@ -10,6 +10,19 @@ require_kubectl
 K="$(kubectl_bin)"
 NS="$(ns_name)"
 
-$K get ns "$NS" >/dev/null 2>&1 || { echo "Namespace not found: $NS"; exit 1; }
-$K -n "$NS" get deploy,svc,pods -o wide
+echo "=== Status Absenta (Namespace: $NS) ==="
+echo ""
+echo "--- Services (Akses lewat IP WireGuard Bapak) ---"
+$K -n "$NS" get svc -o wide | grep -v "CLUSTER-IP" || $K -n "$NS" get svc -o wide
+
+echo ""
+echo "--- Deployments (Aplikasi) ---"
+$K -n "$NS" get deployments -o wide
+
+echo ""
+echo "--- Pods (Kondisi saat ini) ---"
+$K -n "$NS" get pods -o wide
+
+echo ""
+echo "Catatan: Jika port NodePort tidak muncul di 'ss -tulpn', silakan gunakan menu 'Fix Networking'."
 

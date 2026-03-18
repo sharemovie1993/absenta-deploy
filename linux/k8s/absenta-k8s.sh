@@ -26,6 +26,7 @@ run_logs() { echo "--> Menampilkan log backend-api..."; bash "$DIR/modules/k8s-l
 run_restart() { echo "--> Melakukan restart layanan (rollout)..."; bash "$DIR/modules/k8s-restart.sh"; }
 run_uninstall_app() { echo "--> Memulai uninstall Absenta (hapus namespace)..."; bash "$DIR/modules/k8s-uninstall-app.sh"; }
 run_uninstall_k3s() { echo "--> Memulai uninstall k3s (hapus cluster)..."; bash "$DIR/modules/k3s-uninstall.sh"; }
+run_fix_network() { echo "--> Memperbaiki binding networking (NodePort)..."; bash "$DIR/modules/k8s-fix-network.sh"; }
 run_runbook() { echo "--> Membuka menu runbook..."; bash "$DIR/modules/runbook.sh"; }
 run_old_menu() {
   local old_script="$DIR/../deploy_old/absenta_menu.sh"
@@ -69,8 +70,9 @@ while true; do
   echo "9) Runbook (baca panduan dari menu)"
   echo "10) Uninstall Absenta (hapus namespace)"
   echo "11) Uninstall k3s (hapus cluster di node ini)"
-  echo "12) Ke Menu Toolbox (Infra/DB/Safe)"
-  echo "13) Ke Menu Lama (Legacy / Deploy Old)"
+  echo "12) Fix Networking (NodePort Binding)"
+  echo "13) Ke Menu Toolbox (Infra/DB/Safe)"
+  echo "14) Ke Menu Lama (Legacy / Deploy Old)"
   echo "0) Keluar"
   read -rp "Pilih: " opt
   case "${opt:-}" in
@@ -85,8 +87,9 @@ while true; do
     9) run_runbook ;;
     10) run_uninstall_app ;;
     11) run_uninstall_k3s ;;
-    12) run_toolbox_menu ;;
-    13) run_old_menu ;;
+    12) run_fix_network ;;
+    13) run_toolbox_menu ;;
+    14) run_old_menu ;;
     0) exit 0 ;;
     *) echo "Pilihan tidak dikenal" ;;
   esac
