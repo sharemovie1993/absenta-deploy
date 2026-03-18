@@ -58,7 +58,7 @@ else
   echo "[!] Pod untuk job $name tidak ditemukan. Mencoba logs via job..."
   $K -n "$NS" logs job/"$name" || echo "[!] Gagal mengambil log dari job."
 fi
-echo "-----------------------------------------------""
+echo "-----------------------------------------------"
 
 echo "--> Memeriksa status akhir job..."
 if $K -n "$NS" get job "$name" -o jsonpath='{.status.succeeded}' | grep -q "1"; then
