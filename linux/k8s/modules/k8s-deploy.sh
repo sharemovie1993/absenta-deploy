@@ -4,14 +4,11 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$DIR/../lib/common.sh"
 
-need_cmd mktemp
-
 load_env_files
 require_kubectl
 
 K="$(kubectl_bin)"
 NS="$(ns_name)"
-
 OUT="$(bash "$DIR/k8s-render.sh")"
 
 # Pre-flight Check: Pastikan image sudah ada di K3s ctr
@@ -44,46 +41,53 @@ $K -n "$NS" delete pods --field-selector=status.phase=Failed >/dev/null 2>&1 || 
 $K -n "$NS" get pods --no-headers | grep -E "ImagePullBackOff|ErrImagePull" | awk '{print $1}' | xargs -r $K -n "$NS" delete pod >/dev/null 2>&1 || true
 
 echo "--> Menunggu pod menyala (Live Status)..."
-# Jalankan status monitor di background selama rollout
+
+# Background monitor
 (
-  ITERATION=0
-  MAX_ITERATION=20 # Sekitar 60 detik (20 * 3s)
-  while [ $ITERATION -lt $MAX_ITERATION ]; do
+  while true; do
+    clear
     echo "--- [Status Pod @ $(date +%H:%M:%S)] ---"
-    POD_STATUS=$($K -n "$NS" get pods --no-headers | grep -v "Completed")
-    echo "$POD_STATUS" | head -n 10
+    $K -n "$NS" get pods
     
-    # Cek jika ada CrashLoopBackOff yang parah
-    if echo "$POD_STATUS" | grep -q "CrashLoopBackOff"; then
-       echo "   [!] Terdeteksi CrashLoopBackOff. Memeriksa log..."
+    # Cek jika ada CrashLoopBackOff
+    if $K -n "$NS" get pods | grep -q "CrashLoopBackOff"; then
+       CRASH_POD=$($K -n "$NS" get pods | grep "CrashLoopBackOff" | awk '{print $1}' | head -n1)
+       echo ""
+       echo "[!] Terdeteksi Crash pada pod: $CRASH_POD"
+       echo "--- Log Terakhir ---"
+       $K -n "$NS" logs "$CRASH_POD" --tail=20
        break
     fi
-
-    # Cek jika sudah Running semua
-    if ! echo "$POD_STATUS" | grep -qvE "Running|Terminating"; then
-       echo "   [OK] Semua Pod sudah Running."
+    
+    # Cek jika semua sudah Running
+    TOTAL=$($K -n "$NS" get pods --no-headers | wc -l)
+    READY=$($K -n "$NS" get pods --no-headers | grep "1/1" | wc -l)
+    READY_2=$($K -n "$NS" get pods --no-headers | grep "2/2" | wc -l)
+    SUM=$((READY + READY_2))
+    
+    if [ "$SUM" -eq "$TOTAL" ] && [ "$TOTAL" -gt 0 ]; then
+       echo ""
+       echo "[OK] Semua pod sudah menyala sempurna!"
        break
     fi
-
+    
     sleep 3
-    ITERATION=$((ITERATION+1))
   done
 ) &
 MONITOR_PID=$!
 
-# Tunggu rollout selesai (ini akan memblokir sampai sukses atau timeout)
-$K -n "$NS" rollout status deploy/backend-api --timeout=120s || {
-  echo ""
-  echo "!!! DEPLOY GAGAL ATAU TIMEOUT !!!"
-  echo "Menampilkan penyebab error terakhir:"
-  $K -n "$NS" get pods
-  echo "--- Log Backend API ---"
-  $K -n "$NS" logs deploy/backend-api --tail=30
-}
+# Wait for rollout
+$K -n "$NS" rollout status deployment/backend-api --timeout=300s || true
 
 # Matikan monitor background
 kill $MONITOR_PID 2>/dev/null || true
 
+echo ""
+echo "=== Rangkaian Akhir: Database Migration & Seed ==="
+# Jalankan migrasi secara otomatis sebagai bagian dari deploy
+bash "$DIR/k8s-migrate.sh"
+
+echo ""
 echo "=== Verifikasi Networking K3s ==="
 $K -n "$NS" get pods
 $K -n "$NS" get svc
@@ -105,4 +109,3 @@ for port in 32001 32080; do
 done
 
 echo "Done"
-
